@@ -1,0 +1,9 @@
+{
+  "id": "git-panel",
+  "media": [],
+  "requirements": {
+    "paseo": ">=0.15.0"
+  },
+  "name": "Git Panel",
+  "description": "IDE-style Git panel for Paseo: repositories, branches, commit graph, changes with commit and amend, diffs, file browser, and a composer branch marker."
+}

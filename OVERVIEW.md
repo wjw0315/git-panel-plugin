@@ -1,0 +1,9 @@
+Git Panel brings an IDE-style Git workflow into Paseo. It opens as a workspace tab with a repository switcher that also finds nested repositories and worktrees inside the workspace.
+
+The panel covers branches and tags, a commit history with a lane graph and per-commit file diffs, and a changes list with stage, unstage, discard, commit, and amend. It can fetch, fast-forward pull, push, publish a branch, create tags, revert commits, reset the current branch, and manage stashes. A file browser previews text, Markdown, and images. On desktop it uses CodeMirror 6 for reading and editing (line numbers, syntax highlighting, search, keyboard shortcuts), autosaves 1.5 seconds after typing stops, and still checks the on-disk version before writing, so an externally changed file keeps your draft instead of being overwritten. Native hosts fall back to the plain text editor.
+
+A small marker above each agent's composer shows the current repository and branch, colored green when the working tree is clean and orange when it has uncommitted changes; clicking it opens the panel.
+
+Setup needs a Git CLI on the daemon machine and the plugin's global switch enabled. Git commands run with argv arrays, no shell, a fixed repository working directory, timeouts, and output ceilings. The plugin makes no network requests of its own; fetch, pull, and push contact remotes only when you press them, with credentials handled by Git. File access is limited to the workspace, the `.git` directory is not browsable, and edits are restricted to a small allowlist of text file types with an atomic replace.
+
+Known limits: commit-message generation is not included because Paseo does not expose its metadata generator to plugins; the history filter covers messages and hash prefixes, not authors, dates, or historical paths; and the diff view offers unified and split layouts with full-context expansion but no per-gap expansion or image zoom.
