@@ -16,7 +16,8 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prototype": "rsync -a --delete --exclude node_modules --exclude .git --exclude .scratch --exclude tests --exclude AGENTS.local.md --exclude AGENTS.md --exclude CLAUDE.md ./ /Users/jiaweiwu/paseo-plugins/git-panel/ && paseo plugin reload git-panel"
   },
   "devDependencies": {
     "@codemirror/autocomplete": "^6.20.4",
