@@ -42,6 +42,13 @@ export function GitPanelSettings({ theme }: PluginSurfaceProps) {
             disabled={settings.status !== "ready"}
           />
           <SettingsSwitch
+            label={strings.allowSystemOpen}
+            hint={strings.allowSystemOpenHint}
+            value={values.allowSystemOpen}
+            onValueChange={(value) => save({ allowSystemOpen: value })}
+            disabled={settings.status !== "ready"}
+          />
+          <SettingsSwitch
             label={strings.autoSave}
             hint={strings.autoSaveHint}
             value={values.autoSaveFile}

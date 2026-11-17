@@ -7,6 +7,7 @@ import {
   dirListRpc,
   fileContentRpc,
   fileWriteRpc,
+  fsOpRpc,
   historyRpc,
   lastMessageRpc,
   mergePreviewRpc,
@@ -16,6 +17,7 @@ import {
   showRpc,
   snapshotRpc,
   stashListRpc,
+  type FsOp,
   type GitAction,
   type GitChange,
 } from "../shared/git";
@@ -31,6 +33,7 @@ export function useGitApi() {
     dir: useRpc(dirListRpc),
     file: useRpc(fileContentRpc),
     write: useRpc(fileWriteRpc),
+    fsOp: useRpc(fsOpRpc),
     action: useRpc(actionRpc),
     mergePreview: useRpc(mergePreviewRpc),
     stash: useRpc(stashListRpc),
@@ -258,4 +261,21 @@ export function useFileWrite(cwd: string | null, repo: string) {
 
 export function changeKey(change: GitChange): string {
   return `${change.staged ? "s" : "w"}:${change.path}`;
+}
+
+/**
+ * 文件树上下文菜单的写操作。成功后重拉该仓库全部目录缓存（受影响目录由
+ * 服务端 affectedDir 给出；这里用 dir 前缀批量失效，展开状态在组件 state 里不受影响）。
+ */
+export function useFsOp(cwd: string | null, repo: string) {
+  const api = useGitApi();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (op: FsOp) => api.fsOp({ cwd: cwd ?? "", repo, op }),
+    onSuccess: (result) => {
+      if (!result.ok) return;
+      void client.invalidateQueries({ queryKey: [KEY, "dir", cwd, repo] });
+      void client.invalidateQueries({ queryKey: [KEY, "snapshot", cwd, repo] });
+    },
+  });
 }

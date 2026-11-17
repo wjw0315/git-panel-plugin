@@ -5,6 +5,7 @@ import { Icon, Markdown, useToast } from "@getpaseo/plugin/client/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import { useDirQuery, useFileQuery, useFileWrite, useGitApi } from "./api";
+import { useContextMenu } from "./context-menu";
 import { Editor } from "./editor";
 import { createAutosave, type AutosaveController, type SaveStatus } from "./editor/autosave";
 import { PlainTextEditor } from "./editor/plain-text";
@@ -343,6 +344,19 @@ export function FilesTab({
     setSelected(null);
   };
 
+  // 文件树上下文菜单（定案变体 B 锚定浮层）；spec: .scratch/file-tree-context-menu/spec.md。
+  const contextMenu = useContextMenu({
+    theme,
+    strings,
+    cwd,
+    repo,
+    openPath: selected,
+    dirty,
+    onFlush: flushBeforeLeaving,
+    onOpenPath: (path) => setSelected(path),
+    onSave: () => void save(),
+  });
+
   const tree = (
     <View style={{ flex: 1, minHeight: 0 }}>
       <View
@@ -387,6 +401,11 @@ export function FilesTab({
               if (row.entry.dir) toggleDir(row.path);
               else void openFile(row.path);
             }}
+            {...contextMenu.rowPress({
+              path: row.path,
+              name: row.entry.name,
+              isDir: row.entry.dir,
+            })}
             style={({ pressed }) => ({
               flexDirection: "row",
               alignItems: "center",
@@ -454,6 +473,7 @@ export function FilesTab({
           onPress={paged.showMore}
         />
       </ScrollView>
+      {contextMenu.layer}
     </View>
   );
 

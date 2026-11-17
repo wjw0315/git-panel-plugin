@@ -162,6 +162,20 @@ export interface Strings {
   unsaved: string;
   saveFailed: string;
   fileChanged: string;
+  contextRename: string;
+  contextCopyPath: string;
+  contextReveal: string;
+  contextOpenWith: string;
+  contextNewFile: string;
+  contextNewFolder: string;
+  contextUpload: string;
+  uploading: string;
+  namePlaceholder: string;
+  deleteFileDetail: string;
+  deleteFolderDetail: string;
+  openerUnavailable: string;
+  allowSystemOpen: string;
+  allowSystemOpenHint: string;
   reload: string;
   keepDraft: string;
   discardDraft: string;
@@ -372,6 +386,20 @@ const en: Strings = {
   unsaved: "Unsaved",
   saveFailed: "Save failed",
   fileChanged: "The file changed on disk; reload before saving",
+  contextRename: "Rename",
+  contextCopyPath: "Copy path",
+  contextReveal: "Reveal in Finder",
+  contextOpenWith: "Open with default app",
+  contextNewFile: "New file",
+  contextNewFolder: "New folder",
+  contextUpload: "Upload file",
+  uploading: "Uploading…",
+  namePlaceholder: "Name",
+  deleteFileDetail: "This file will be deleted. Untracked files cannot be recovered.",
+  deleteFolderDetail: "This folder and everything inside it will be deleted. Untracked files cannot be recovered.",
+  openerUnavailable: "Cannot open on the daemon machine — it may be a remote workspace.",
+  allowSystemOpen: "System openers",
+  allowSystemOpenHint: "Allow the file tree menu to reveal files in Finder or open them with the default app. Turn off for remote workspaces.",
   reload: "Reload",
   keepDraft: "Keep draft",
   discardDraft: "Discard draft",
@@ -580,6 +608,20 @@ const zh: Strings = {
   unsaved: "未保存",
   saveFailed: "保存失败",
   fileChanged: "文件在编辑期间被改动，请重新加载后再保存",
+  contextRename: "重命名",
+  contextCopyPath: "复制路径",
+  contextReveal: "在 Finder 中显示",
+  contextOpenWith: "用默认应用打开",
+  contextNewFile: "新建文件",
+  contextNewFolder: "新建文件夹",
+  contextUpload: "上传文件",
+  uploading: "上传中…",
+  namePlaceholder: "名称",
+  deleteFileDetail: "将删除这个文件；未跟踪的文件删除后无法恢复。",
+  deleteFolderDetail: "将删除这个文件夹（含全部内容）；未跟踪的文件删除后无法恢复。",
+  openerUnavailable: "无法在 daemon 所在机器打开——它可能是远程环境。",
+  allowSystemOpen: "系统打开器",
+  allowSystemOpenHint: "允许文件树菜单「在 Finder 中显示」「用默认应用打开」；远程工作区建议关闭。",
   reload: "重新加载",
   keepDraft: "保留草稿",
   discardDraft: "放弃草稿",
