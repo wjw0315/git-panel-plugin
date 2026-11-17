@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import type { ZodType } from "zod";
 
 /** Stand-in for the host's plugin client context. */
 type RpcContract = { name: string };
@@ -39,4 +40,38 @@ export function useSettings(_contract?: unknown) {
 
 export function PluginRpcProvider({ children }: { children?: ReactNode }) {
   return children;
+}
+
+/** 宿主侧状态桩：面板测试只需要工作目录、agent cwd 与 tab 持久化。 */
+const WORKSPACE = {
+  directory: "/repo",
+  projectRootPath: "/repo",
+  name: "repo",
+  projectKind: "git" as const,
+};
+
+const AGENT = { cwd: "/repo" };
+
+export function useWorkspace<Selection>(
+  _workspaceId: string,
+  selector: (workspace: typeof WORKSPACE) => Selection,
+): Selection | null {
+  return selector(WORKSPACE);
+}
+
+export function useAgent<Selection>(
+  _agentId: string,
+  selector: (agent: typeof AGENT) => Selection,
+): Selection | null {
+  return selector(AGENT);
+}
+
+/** tab 状态桩：内存里保存，行为足以覆盖面板的页签与仓库切换。 */
+export function useTabState<T>(
+  _tab: unknown,
+  schema: ZodType<T>,
+  defaultState: T,
+): [T, (next: T) => void] {
+  const [state, setState] = useState<T>(() => schema.parse(defaultState));
+  return [state, setState];
 }

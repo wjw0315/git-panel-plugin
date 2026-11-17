@@ -256,6 +256,8 @@ export async function buildSnapshot(
     logResult,
     remoteNamesResult,
     upstreamResult,
+    mergeHeadResult,
+    rebaseHeadResult,
   ] = await Promise.all([
     git(root, ["status", "--porcelain=v1", "-z", "--untracked-files=normal"], {
       timeout: 15_000,
@@ -268,6 +270,14 @@ export async function buildSnapshot(
     }),
     git(root, ["remote"], { accept: [128], timeout: 8_000 }),
     git(root, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"], {
+      accept: [1, 128],
+      timeout: 8_000,
+    }),
+    git(root, ["rev-parse", "-q", "--verify", "MERGE_HEAD"], {
+      accept: [1, 128],
+      timeout: 8_000,
+    }),
+    git(root, ["rev-parse", "-q", "--verify", "REBASE_HEAD"], {
       accept: [1, 128],
       timeout: 8_000,
     }),
@@ -291,9 +301,20 @@ export async function buildSnapshot(
     limitedChanges.filter((c) => c.status === "untracked").map((c) => c.path),
   );
   const conflicted = limitedChanges.filter((c) => c.status === "conflicted").length;
+  const branchState =
+    mergeHeadResult.code === 0
+      ? ("merging" as const)
+      : rebaseHeadResult.code === 0
+        ? ("rebasing" as const)
+        : null;
 
   const previous = options.previous ?? null;
-  if (previous && fingerprintOf(previous) === fingerprintOf({ changes: limitedChanges, head, branch })) {
+  if (
+    previous &&
+    fingerprintOf(previous) ===
+      fingerprintOf({ changes: limitedChanges, head, branch }) &&
+    previous.branchState === branchState
+  ) {
     return { ...previous, root, checkedAt };
   }
 
@@ -428,6 +449,7 @@ export async function buildSnapshot(
     modified: modifiedPaths.size,
     untracked: untrackedPaths.size,
     conflicted,
+    branchState,
     ahead,
     behind,
     hasUpstream,

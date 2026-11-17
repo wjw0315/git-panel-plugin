@@ -3,12 +3,14 @@ import { Icon, Modal, TextInput, copyText, useToast } from "@getpaseo/plugin/cli
 import { useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, ScrollView, Text, View } from "react-native";
 import type { GitAction, GitCommit, GitRef, GitSnapshot } from "../shared/git";
-import { useDiffQuery, useGitAction, useHistoryQuery, useRefsQuery, useShowQuery } from "./api";
+import { useDiffQuery, useGitAction, useHistoryQuery, useMergePreviewQuery, useRefsQuery, useShowQuery } from "./api";
 import { DiffView, type DiffMode } from "./diff-view";
 import { formatDate, relativeTime } from "./format";
 import { GRAPH_COLORS, laneCount, layoutGraph } from "./graph";
 import { EmptyState, IconButton, SectionLabel, TextButton } from "./kit";
+import type { PanelMode } from "./layout";
 import { useLocale, type Strings } from "./strings";
+import { UpdateBranchDialog } from "./update-branch";
 
 interface ConfirmState {
   title: string;
@@ -24,15 +26,16 @@ export function OverviewTab({
   snapshot,
   theme,
   strings,
-  wide,
+  mode,
 }: {
   cwd: string | null;
   repo: string;
   snapshot: GitSnapshot;
   theme: PluginTheme;
   strings: Strings;
-  wide: boolean;
+  mode: PanelMode;
 }) {
+  const wide = mode === "wide";
   const zh = useLocale().toLowerCase().startsWith("zh");
   const toast = useToast();
   const [limit, setLimit] = useState(80);
@@ -41,6 +44,9 @@ export function OverviewTab({
   const [selected, setSelected] = useState<string | null>(null);
   const [branchOpen, setBranchOpen] = useState(false);
   const [branchAction, setBranchAction] = useState<{ name: string; track: boolean } | null>(null);
+  const [updateOpen, setUpdateOpen] = useState(false);
+  const [updateSelected, setUpdateSelected] = useState<string | null>(null);
+  const [updateOp, setUpdateOp] = useState<"merge" | "rebase">("merge");
   const [createFrom, setCreateFrom] = useState<string | null>(null);
   const [newBranch, setNewBranch] = useState("");
   const [tagFor, setTagFor] = useState<string | null>(null);
@@ -65,6 +71,7 @@ export function OverviewTab({
   }, [repo]);
 
   const refs = useRefsQuery(cwd, repo, true);
+  const mergePreview = useMergePreviewQuery(cwd, repo, updateOpen ? updateSelected : null, updateOpen ? updateOp : "merge");
   const history = useHistoryQuery(cwd, repo, { limit, search: debounced }, true);
   const show = useShowQuery(cwd, repo, selected);
   const action = useGitAction(cwd, repo);
@@ -125,6 +132,11 @@ export function OverviewTab({
         setNewBranch("");
       }}
       onRefresh={() => void refs.refetch()}
+      onUpdate={() => {
+        setUpdateSelected(null);
+        setUpdateOp("merge");
+        setUpdateOpen(true);
+      }}
     />
   );
 
@@ -329,6 +341,48 @@ export function OverviewTab({
           {branchList}
         </Modal.Content>
       </Modal>
+
+      <UpdateBranchDialog
+        theme={theme}
+        strings={strings}
+        open={updateOpen}
+        current={snapshot.branch ?? ""}
+        operation={updateOp}
+        data={refs.data ? { local: refs.data.local, remote: refs.data.remote } : undefined}
+        selected={updateSelected}
+        preview={
+          mergePreview.data?.ok
+            ? {
+                commitCount: mergePreview.data.commitCount,
+                conflicts: mergePreview.data.conflicts,
+                previewSupported: mergePreview.data.previewSupported,
+              }
+            : null
+        }
+        workspaceClean={mergePreview.data?.ok ? mergePreview.data.workspaceClean : null}
+        branchState={snapshot.branchState}
+        conflictedFiles={snapshot.changes.filter((c) => c.status === "conflicted").map((c) => c.path)}
+        pending={action.isPending}
+        onSelectOperation={setUpdateOp}
+        onSelect={setUpdateSelected}
+        onOpenChange={(next) => {
+          if (!next) setUpdateOpen(false);
+        }}
+        onRun={() => {
+          if (!updateSelected) return;
+          if (updateOp === "merge") {
+            runGit({ kind: "merge", branch: updateSelected }, strings.updateDone);
+          } else {
+            runGit({ kind: "rebase", onto: updateSelected }, strings.updateRebaseDone);
+          }
+          setUpdateOpen(false);
+          setUpdateSelected(null);
+        }}
+        onAbort={() => {
+          runGit({ kind: "abort" }, strings.updateAborted);
+          setUpdateOpen(false);
+        }}
+      />
 
       <Modal
         open={branchAction !== null}
@@ -579,6 +633,7 @@ export function OverviewTab({
               text={diff.data?.ok ? diff.data.text : ""}
               mode={diffMode}
               onModeChange={setDiffMode}
+              panelMode={mode}
               binary={diff.data?.ok ? diff.data.binary : false}
               tooLarge={diff.data?.ok ? diff.data.tooLarge : false}
               loading={diff.isPending}
@@ -628,6 +683,7 @@ export function BranchesPane({
   onPick,
   onCreate,
   onRefresh,
+  onUpdate,
 }: {
   theme: PluginTheme;
   strings: Strings;
@@ -644,6 +700,7 @@ export function BranchesPane({
   onPick: (name: string, track?: boolean) => void;
   onCreate: () => void;
   onRefresh: () => void;
+  onUpdate: () => void;
 }) {
   return (
     <View style={{ flex: 1, minHeight: 0 }}>
@@ -658,6 +715,13 @@ export function BranchesPane({
       >
         <SectionLabel theme={theme}>{strings.branches}</SectionLabel>
         <View style={{ flexDirection: "row", gap: 2 }}>
+          <IconButton
+            theme={theme}
+            icon="GitMerge"
+            label={strings.updateBranch}
+            hint={strings.hintUpdateBranch}
+            onPress={onUpdate}
+          />
           <IconButton
             theme={theme}
             icon="Plus"
@@ -979,6 +1043,7 @@ function CommitDetail({
           paddingVertical: 5,
           borderBottomWidth: 1,
           borderColor: theme.colors.border,
+          flexWrap: "wrap",
         }}
       >
         {onBack ? (

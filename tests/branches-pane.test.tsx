@@ -50,6 +50,7 @@ describe("BranchesPane 分支点击", () => {
         onPick={onPick}
         onCreate={() => {}}
         onRefresh={() => {}}
+        onUpdate={() => {}}
       />,
     );
 
@@ -69,6 +70,7 @@ describe("BranchesPane 分支点击", () => {
         onPick={onPick}
         onCreate={() => {}}
         onRefresh={() => {}}
+        onUpdate={() => {}}
       />,
     );
 

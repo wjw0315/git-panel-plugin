@@ -115,7 +115,7 @@ function mount(setModified: (value: boolean) => void = () => {}) {
         repo=""
         theme={THEME}
         strings={STRINGS}
-        wide
+        mode="wide"
         tab={{ setModified } as never}
       />
     </QueryClientProvider>,

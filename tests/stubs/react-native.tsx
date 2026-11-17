@@ -10,12 +10,23 @@ type StubProps = Record<string, unknown> & {
   accessibilityRole?: string;
   disabled?: boolean;
   numberOfLines?: number;
+  onLayout?: (event: unknown) => void;
   onPress?: () => void;
   onHoverIn?: () => void;
   onHoverOut?: () => void;
   style?: unknown;
   testID?: string;
 };
+
+/**
+ * jsdom has no layout engine, so the stub records each `onLayout` handler by
+ * node and tests trigger it with `fireLayout(node, width)`.
+ */
+const layoutHandlers = new WeakMap<Element, (event: unknown) => void>();
+
+export function fireLayout(element: Element, width: number, height = 0): void {
+  layoutHandlers.get(element)?.({ nativeEvent: { layout: { x: 0, y: 0, width, height } } });
+}
 
 /** RN 的 shadow* 打平成 box-shadow，方便测试断言悬停阴影。 */
 function shadowToCss(style: Record<string, unknown>): string | undefined {
@@ -31,6 +42,7 @@ function host(tag: string) {
   return forwardRef<unknown, StubProps>(function Host(props, ref) {
     const {
       children,
+      onLayout,
       onPress,
       onHoverIn,
       onHoverOut,
@@ -51,17 +63,37 @@ function host(tag: string) {
       resolvedStyle && typeof resolvedStyle === "object"
         ? shadowToCss(resolvedStyle as Record<string, unknown>)
         : undefined;
+    // display:"none"（窄屏单列的隐藏列）与数值 width/minWidth（split 单元格宽度）
+    // 要落进 DOM，测试才能断言可见性与算出的宽度。
+    const css: Record<string, string> = {};
+    if (boxShadow) css.boxShadow = boxShadow;
+    if (resolvedStyle && typeof resolvedStyle === "object") {
+      const resolved = resolvedStyle as Record<string, unknown>;
+      if (resolved.display === "none") css.display = "none";
+      // jsdom 的 cssstyle 拒收无单位数值，必须带 px 才会落进 style 属性。
+      if (typeof resolved.width === "number") css.width = `${resolved.width}px`;
+      if (typeof resolved.minWidth === "number") css.minWidth = `${resolved.minWidth}px`;
+    }
+    const hasCss = Object.keys(css).length > 0;
+    // RN stub 的 props 带索引签名，onLayout 的静态类型会被摊成 unknown；按函数收窄一次。
+    const layoutHandler =
+      typeof onLayout === "function" ? (onLayout as (event: unknown) => void) : null;
+    const attach = (node: unknown) => {
+      if (node instanceof Element && layoutHandler) layoutHandlers.set(node, layoutHandler);
+      if (typeof ref === "function") ref(node);
+      else if (ref) ref.current = node;
+    };
     return createElement(
       tag,
       {
-        ref,
+        ref: attach,
         onClick: onPress as (() => void) | undefined,
         onMouseEnter: onHoverIn as (() => void) | undefined,
         onMouseLeave: onHoverOut as (() => void) | undefined,
         role: accessibilityRole,
         "aria-label": accessibilityLabel,
         disabled: tag === "button" ? disabled : undefined,
-        style: boxShadow ? { boxShadow } : undefined,
+        style: hasCss ? css : undefined,
         "data-testid": testID,
       } as Record<string, unknown>,
       children as ReactNode,
@@ -74,6 +106,36 @@ export const Text = host("span");
 export const ScrollView = host("div");
 export const Image = host("img");
 export const Pressable = host("button");
+
+/** jsdom 里没有虚拟化列表，测试只关心行内容，按数组平铺即可。 */
+export function FlatList<T>({
+  data,
+  renderItem,
+  keyExtractor,
+  ListEmptyComponent,
+  ListFooterComponent,
+}: {
+  data?: readonly T[] | null;
+  renderItem: (info: { item: T; index: number }) => ReactNode;
+  keyExtractor?: (item: T, index: number) => string;
+  ListEmptyComponent?: ReactNode;
+  ListFooterComponent?: ReactNode;
+  style?: unknown;
+  contentContainerStyle?: unknown;
+}) {
+  const rows = data ?? [];
+  return (
+    <div>
+      {rows.length === 0 ? ListEmptyComponent : null}
+      {rows.map((item, index) => (
+        <div key={keyExtractor ? keyExtractor(item, index) : index}>
+          {renderItem({ item, index })}
+        </div>
+      ))}
+      {ListFooterComponent}
+    </div>
+  );
+}
 
 export const StyleSheet = {
   create: <T,>(styles: T): T => styles,

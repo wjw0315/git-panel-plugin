@@ -8,6 +8,7 @@ import {
   gitPanelSettings,
   historyRpc,
   lastMessageRpc,
+  mergePreviewRpc,
   panelErrorRpc,
   refsRpc,
   reposRpc,
@@ -19,6 +20,7 @@ import { runAction } from "./server/actions";
 import { getDiff } from "./server/diff";
 import { getFileContent, listDirectory, writeFileContent } from "./server/files";
 import { getHistory, getLastMessage, getRefs, getStashList } from "./server/history";
+import { getMergePreview } from "./server/merge";
 import { listRepos } from "./server/repos";
 import { getShow } from "./server/show";
 import { buildSnapshot } from "./server/snapshot";
@@ -111,6 +113,8 @@ export default function contribute(server: PluginServerContext) {
   });
 
   server.handle(actionRpc, async (input) => runAction(input));
+
+  server.handle(mergePreviewRpc, async (input) => getMergePreview(input));
 
   return () => {};
 }

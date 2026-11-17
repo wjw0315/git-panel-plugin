@@ -85,7 +85,7 @@ function mount(client: QueryClient, repo: string) {
         repo={repo}
         theme={THEME}
         strings={STRINGS}
-        wide
+        mode="wide"
         tab={{ setModified: () => {} } as never}
       />
     </QueryClientProvider>,

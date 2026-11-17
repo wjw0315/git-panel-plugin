@@ -7,13 +7,7 @@ import { useAgent, useSettings, useTabState, useWorkspace } from "@getpaseo/plug
 import { Icon, Modal, useToast } from "@getpaseo/plugin/client/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import {
-  Pressable,
-  ScrollView,
-  Text,
-  useWindowDimensions,
-  View,
-} from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { z } from "zod";
 import { DEFAULT_SETTINGS, gitPanelSettings, type GitRepoEntry } from "../shared/git";
 import { useGitAction, useReposQuery, useSnapshotQuery } from "./api";
@@ -21,6 +15,7 @@ import { ChangesTab } from "./changes";
 import { PanelErrorBoundary } from "./error-boundary";
 import { FilesTab } from "./files";
 import { CountBadge, EmptyState, IconButton, TextButton } from "./kit";
+import { usePanelMode } from "./layout";
 import { OverviewTab } from "./overview";
 import { useStrings } from "./strings";
 
@@ -83,8 +78,7 @@ function GitPanelBody({
   const strings = useStrings();
   const toast = useToast();
   const queryClient = useQueryClient();
-  const { width } = useWindowDimensions();
-  const wide = !layout.compact && width >= 860;
+  const { mode, onLayout } = usePanelMode(layout.compact);
   const workspace = useWorkspace(workspaceId, (snapshot) => ({
     directory: snapshot.directory,
     projectRootPath: snapshot.projectRootPath,
@@ -221,7 +215,13 @@ function GitPanelBody({
         {snapshotValue ? (
           <Text
             numberOfLines={1}
-            style={{ color: theme.colors.foregroundMuted, fontFamily: "Menlo", fontSize: 11 }}
+            style={{
+              color: theme.colors.foregroundMuted,
+              fontFamily: "Menlo",
+              fontSize: 11,
+              flexShrink: 1,
+              minWidth: 0,
+            }}
           >
             ({statusLabel})
           </Text>
@@ -310,13 +310,22 @@ function GitPanelBody({
         />
       </View>
 
-      <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 2, marginTop: 2 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "flex-end",
+          gap: 2,
+          marginTop: 2,
+          flexWrap: "wrap",
+        }}
+      >
         <TabButton
           theme={theme}
           label={strings.overview}
           icon="GitCommitHorizontal"
           active={state.tab === "overview"}
           disabled={!hasRepo}
+          compact={mode === "narrow"}
           onPress={() => selectTab("overview")}
         />
         <TabButton
@@ -326,6 +335,7 @@ function GitPanelBody({
           active={state.tab === "changes"}
           disabled={!hasRepo}
           count={snapshotValue?.stats.fileCount ?? 0}
+          compact={mode === "narrow"}
           onPress={() => selectTab("changes")}
         />
         <TabButton
@@ -333,6 +343,7 @@ function GitPanelBody({
           label={strings.files}
           icon="FolderTree"
           active={state.tab === "files"}
+          compact={mode === "narrow"}
           onPress={() => selectTab("files")}
         />
       </View>
@@ -358,7 +369,7 @@ function GitPanelBody({
         repo={values.filesFollowRepo ? repo : ""}
         theme={theme}
         strings={strings}
-        wide={wide}
+        mode={mode}
         tab={tab}
       />
     );
@@ -413,7 +424,7 @@ function GitPanelBody({
         snapshot={snapshotValue}
         theme={theme}
         strings={strings}
-        wide={wide}
+        mode={mode}
       />
     );
   } else if (snapshotValue && state.tab === "changes") {
@@ -424,7 +435,7 @@ function GitPanelBody({
         snapshot={snapshotValue}
         theme={theme}
         strings={strings}
-        wide={wide}
+        mode={mode}
         initialView={values.changesView}
         initialDiffMode={values.defaultDiffView}
       />
@@ -434,7 +445,11 @@ function GitPanelBody({
   }
 
   return (
-    <View style={{ flex: 1, minHeight: 0, backgroundColor: theme.colors.surface0 }}>
+    <View
+      testID="git-panel"
+      style={{ flex: 1, minHeight: 0, backgroundColor: theme.colors.surface0 }}
+      onLayout={onLayout}
+    >
       {header}
       <View style={{ flex: 1, minHeight: 0 }}>{body}</View>
 
@@ -511,6 +526,7 @@ function TabButton({
   active,
   disabled,
   count,
+  compact,
   onPress,
 }: {
   theme: PluginTheme;
@@ -519,6 +535,8 @@ function TabButton({
   active: boolean;
   disabled?: boolean;
   count?: number;
+  /** 极窄档收成图标：文字隐藏，无障碍标签与计数保留。 */
+  compact?: boolean;
   onPress: () => void;
 }) {
   return (
@@ -544,15 +562,17 @@ function TabButton({
         size={12}
         color={active ? theme.colors.foreground : theme.colors.foregroundMuted}
       />
-      <Text
-        style={{
-          color: active ? theme.colors.foreground : theme.colors.foregroundMuted,
-          fontSize: 12,
-          fontWeight: active ? "600" : "400",
-        }}
-      >
-        {label}
-      </Text>
+      {compact ? null : (
+        <Text
+          style={{
+            color: active ? theme.colors.foreground : theme.colors.foregroundMuted,
+            fontSize: 12,
+            fontWeight: active ? "600" : "400",
+          }}
+        >
+          {label}
+        </Text>
+      )}
       <CountBadge theme={theme} value={count ?? 0} />
     </Pressable>
   );

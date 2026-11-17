@@ -21,6 +21,7 @@ import {
   TextButton,
   usePagedList,
 } from "./kit";
+import type { PanelMode } from "./layout";
 import { useLocale, type Strings } from "./strings";
 
 export function ChangesTab({
@@ -29,7 +30,7 @@ export function ChangesTab({
   snapshot,
   theme,
   strings,
-  wide,
+  mode,
   initialView,
   initialDiffMode,
 }: {
@@ -38,10 +39,11 @@ export function ChangesTab({
   snapshot: GitSnapshot;
   theme: PluginTheme;
   strings: Strings;
-  wide: boolean;
+  mode: PanelMode;
   initialView: "flat" | "tree";
   initialDiffMode: DiffMode;
 }) {
+  const wide = mode === "wide";
   const zh = useLocale().toLowerCase().startsWith("zh");
   const toast = useToast();
   const [message, setMessage] = useState("");
@@ -166,6 +168,7 @@ export function ChangesTab({
       text={diff.data?.ok ? diff.data.text : ""}
       mode={diffMode}
       onModeChange={setDiffMode}
+      panelMode={mode}
       binary={diff.data?.ok ? diff.data.binary : false}
       tooLarge={diff.data?.ok ? diff.data.tooLarge : false}
       loading={diff.isPending}
@@ -500,7 +503,7 @@ export function ChangesTab({
             maxHeight: 110,
           }}
         />
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <Checkbox
             theme={theme}
             checked={amend}

@@ -110,6 +110,33 @@ export interface Strings {
   resetConfirm: string;
   revert: string;
   revertConfirm: string;
+  updateReset: string;
+  updateBranch: string;
+  hintUpdateBranch: string;
+  updateBringInto: string;
+  updateMergeCard: string;
+  updateMergeCardDesc: string;
+  updateRebaseCard: string;
+  updateRebaseCardDesc: string;
+  updatePickBranch: string;
+  updateBrings: string;
+  updateOntoArrow: string;
+  updateMoves: string;
+  updateMergeNote: string;
+  updateRebaseNote: string;
+  updateSameBranch: string;
+  updatePreviewUnavailable: string;
+  updateConflicts: string;
+  updateNoConflicts: string;
+  updateDirtyWarning: string;
+  updateDone: string;
+  updateRebaseDone: string;
+  updateInProgressMerging: string;
+  updateInProgressRebasing: string;
+  updateAbortMerge: string;
+  updateAbortRebase: string;
+  updateConflictHint: string;
+  updateAborted: string;
   tagCreate: string;
   tagName: string;
   tagMessage: string;
@@ -291,6 +318,35 @@ const en: Strings = {
   resetConfirm: "Reset the current branch to this commit? Hard reset discards changes.",
   revert: "Revert",
   revertConfirm: "Create a commit that reverts this commit?",
+  updateReset: "Reset",
+  updateBranch: "Update branch",
+  hintUpdateBranch: "Bring another branch's changes into the current one",
+  updateBringInto: "Bring changes from another branch into",
+  updateMergeCard: "Merge",
+  updateMergeCardDesc: "Merge the branch with a merge commit, keeping history.",
+  updateRebaseCard: "Rebase",
+  updateRebaseCardDesc: "Move your commits onto another branch, creating linear history.",
+  updatePickBranch: "Select a branch…",
+  updateBrings: "Brings commits",
+  updateOntoArrow: "rebase onto",
+  updateMoves: "Moves commits",
+  updateMergeNote: "Creates a merge commit; nothing is pushed.",
+  updateRebaseNote:
+    "No conflict pre-check for rebase; rewrites commits on the current branch; nothing is pushed.",
+  updateSameBranch: "Source is the current branch",
+  updatePreviewUnavailable: "Conflict pre-check unavailable; you can still run it.",
+  updateConflicts: "Conflicting files",
+  updateNoConflicts: "No conflicts detected",
+  updateDirtyWarning: "Working tree has uncommitted changes; commit or stash first.",
+  updateDone: "Merge complete",
+  updateRebaseDone: "Rebase complete",
+  updateInProgressMerging: "Merge in progress",
+  updateInProgressRebasing: "Rebase in progress",
+  updateAbortMerge: "Abort merge",
+  updateAbortRebase: "Abort rebase",
+  updateConflictHint:
+    "Resolve conflicts in your terminal or another tool, then commit; or abort to return to the previous state.",
+  updateAborted: "Aborted",
   tagCreate: "Create tag",
   tagName: "Tag name",
   tagMessage: "Optional annotation",
@@ -472,6 +528,33 @@ const zh: Strings = {
   resetConfirm: "把当前分支重置到这个提交？硬重置会丢弃改动。",
   revert: "还原提交",
   revertConfirm: "创建一个还原这次提交的新提交？",
+  updateReset: "重置",
+  updateBranch: "更新分支",
+  hintUpdateBranch: "把另一个分支的更改带入当前分支",
+  updateBringInto: "将另一个分支的更改带入",
+  updateMergeCard: "合并",
+  updateMergeCardDesc: "使用合并提交合并分支，并保留历史。",
+  updateRebaseCard: "变基",
+  updateRebaseCardDesc: "将你的提交移到另一分支之上，形成线性历史。",
+  updatePickBranch: "选择分支…",
+  updateBrings: "将带入提交",
+  updateOntoArrow: "变基到",
+  updateMoves: "将被移动提交",
+  updateMergeNote: "将创建合并提交；不会自动推送。",
+  updateRebaseNote: "变基无冲突预演；将改写当前分支的提交；不会自动推送。",
+  updateSameBranch: "来源与当前分支相同",
+  updatePreviewUnavailable: "冲突预检不可用，可直接执行",
+  updateConflicts: "可能冲突文件",
+  updateNoConflicts: "未发现冲突",
+  updateDirtyWarning: "工作区有未提交更改，请先提交或贮藏。",
+  updateDone: "合并完成",
+  updateRebaseDone: "变基完成",
+  updateInProgressMerging: "合并进行中",
+  updateInProgressRebasing: "变基进行中",
+  updateAbortMerge: "中止合并",
+  updateAbortRebase: "中止变基",
+  updateConflictHint: "在终端或外部工具解决冲突后提交；或中止回到操作前状态。",
+  updateAborted: "已中止",
   tagCreate: "新建标签",
   tagName: "标签名",
   tagMessage: "可选的附注",

@@ -9,6 +9,7 @@ import {
   fileWriteRpc,
   historyRpc,
   lastMessageRpc,
+  mergePreviewRpc,
   panelErrorRpc,
   refsRpc,
   reposRpc,
@@ -31,6 +32,7 @@ export function useGitApi() {
     file: useRpc(fileContentRpc),
     write: useRpc(fileWriteRpc),
     action: useRpc(actionRpc),
+    mergePreview: useRpc(mergePreviewRpc),
     stash: useRpc(stashListRpc),
     lastMessage: useRpc(lastMessageRpc),
   };
@@ -196,6 +198,22 @@ export function useLastMessageQuery(cwd: string | null, repo: string, enabled: b
     queryKey: [KEY, "lastMessage", cwd, repo],
     queryFn: () => api.lastMessage({ cwd: cwd ?? "", repo }),
     enabled: Boolean(cwd) && enabled,
+    retry: false,
+  });
+}
+
+export function useMergePreviewQuery(
+  cwd: string | null,
+  repo: string,
+  branch: string | null,
+  operation: "merge" | "rebase",
+) {
+  const api = useGitApi();
+  return useQuery({
+    queryKey: [KEY, "merge-preview", cwd, repo, branch, operation],
+    queryFn: () => api.mergePreview({ cwd: cwd ?? "", repo, branch: branch ?? "", operation }),
+    enabled: Boolean(cwd && branch),
+    staleTime: 5_000,
     retry: false,
   });
 }

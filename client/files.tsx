@@ -5,12 +5,14 @@ import { Icon, Markdown, useToast } from "@getpaseo/plugin/client/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import { useDirQuery, useFileQuery, useFileWrite, useGitApi } from "./api";
+import { ProtoInlineRow, useContextMenuPrototype } from "./context-menu-prototype";
 import { Editor } from "./editor";
 import { createAutosave, type AutosaveController, type SaveStatus } from "./editor/autosave";
 import { PlainTextEditor } from "./editor/plain-text";
 import { formatBytes } from "./format";
 import { DEFAULT_SETTINGS, gitPanelSettings } from "../shared/git";
 import { EmptyState, IconButton, PagedFooter, TextButton, usePagedList } from "./kit";
+import type { PanelMode } from "./layout";
 import type { Strings } from "./strings";
 
 interface DirEntry {
@@ -31,16 +33,17 @@ export function FilesTab({
   repo,
   theme,
   strings,
-  wide,
+  mode,
   tab,
 }: {
   cwd: string | null;
   repo: string;
   theme: PluginTheme;
   strings: Strings;
-  wide: boolean;
+  mode: PanelMode;
   tab: PluginTab;
 }) {
+  const wide = mode === "wide";
   const toast = useToast();
   const api = useGitApi();
   const reportEditorError = useCallback(() => {
@@ -147,6 +150,9 @@ export function FilesTab({
   );
 
   const dirty = Boolean(editing && file.data?.ok && draft !== savedContent.current);
+
+  // ⚠️ 原型接线（client/context-menu-prototype.tsx）：验证完上下文菜单形态后整块移除。
+  const proto = useContextMenuPrototype({ theme, openPath: selected, dirty });
 
   useEffect(() => {
     editingRef.current = editing;
@@ -382,9 +388,14 @@ export function FilesTab({
             accessibilityRole="button"
             accessibilityLabel={row.path}
             onPress={() => {
+              if (proto.isInline(row.path)) {
+                proto.closeInline();
+                return;
+              }
               if (row.entry.dir) toggleDir(row.path);
               else void openFile(row.path);
             }}
+            {...proto.rowPress({ path: row.path, name: row.entry.name, isDir: row.entry.dir })}
             style={({ pressed }) => ({
               flexDirection: "row",
               alignItems: "center",
@@ -396,6 +407,16 @@ export function FilesTab({
               opacity: row.entry.ignored ? 0.55 : 1,
             })}
           >
+            {proto.isInline(row.path) ? (
+              <ProtoInlineRow
+                theme={theme}
+                row={{ path: row.path, name: row.entry.name, isDir: row.entry.dir }}
+                dirtyOpen={dirty && selected === row.path}
+                onPick={proto.inlinePick}
+                onClose={proto.closeInline}
+              />
+            ) : (
+              <>
             {row.entry.dir ? (
               <Icon
                 name={expanded.has(row.path) ? "ChevronDown" : "ChevronRight"}
@@ -442,6 +463,8 @@ export function FilesTab({
             {loadingDir === row.path ? (
               <Text style={{ color: theme.colors.foregroundMuted, fontSize: 10 }}>…</Text>
             ) : null}
+              </>
+            )}
           </Pressable>
         ))}
         <PagedFooter
@@ -452,6 +475,7 @@ export function FilesTab({
           onPress={paged.showMore}
         />
       </ScrollView>
+      {proto.layer}
     </View>
   );
 
@@ -487,6 +511,7 @@ export function FilesTab({
     return (
       <View style={{ flex: 1, minHeight: 0, flexDirection: "row" }}>
         <View
+          testID="files-tree-pane"
           style={{
             width: 280,
             borderRightWidth: 1,
@@ -496,18 +521,28 @@ export function FilesTab({
         >
           {tree}
         </View>
-        <View style={{ flex: 1, minWidth: 0, minHeight: 0 }}>{preview}</View>
+        <View testID="files-preview-pane" style={{ flex: 1, minWidth: 0, minHeight: 0 }}>
+          {preview}
+        </View>
       </View>
     );
   }
 
+  // 窄/中档单列二选一：预览时树保留挂载、整列 display:"none" 隐藏，
+  // 返回时 ScrollView 不重挂载，滚动位置不丢。
   return (
     <View style={{ flex: 1, minHeight: 0 }}>
+      <View
+        testID="files-tree-pane"
+        style={{ flex: 1, minHeight: 0, display: selected ? "none" : "flex" }}
+      >
+        {tree}
+      </View>
       {selected ? (
-        preview
-      ) : (
-        tree
-      )}
+        <View testID="files-preview-pane" style={{ flex: 1, minHeight: 0 }}>
+          {preview}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -617,6 +652,7 @@ function FilePreview({
           paddingVertical: 5,
           borderBottomWidth: 1,
           borderColor: theme.colors.border,
+          flexWrap: "wrap",
         }}
       >
         <IconButton theme={theme} icon="ChevronLeft" label={strings.back} onPress={onClose} />

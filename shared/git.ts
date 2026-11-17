@@ -77,6 +77,8 @@ export const snapshotSchema = z.object({
   modified: z.number().int().nonnegative(),
   untracked: z.number().int().nonnegative(),
   conflicted: z.number().int().nonnegative(),
+  /** 合并/变基进行中状态（探测 MERGE_HEAD / REBASE_HEAD）；null = 无进行中操作。 */
+  branchState: z.enum(["merging", "rebasing"]).nullable(),
   ahead: z.number().int().nonnegative(),
   behind: z.number().int().nonnegative(),
   hasUpstream: z.boolean(),
@@ -348,6 +350,9 @@ export const actionSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("stashPop"), index: z.number().int().nonnegative(), sha: z.string() }),
   z.object({ kind: z.literal("stashDrop"), index: z.number().int().nonnegative(), sha: z.string() }),
   z.object({ kind: z.literal("revert"), commit: z.string().min(1) }),
+  z.object({ kind: z.literal("merge"), branch: z.string().min(1) }),
+  z.object({ kind: z.literal("rebase"), onto: z.string().min(1) }),
+  z.object({ kind: z.literal("abort") }),
   z.object({
     kind: z.literal("reset"),
     commit: z.string().min(1),
@@ -355,6 +360,37 @@ export const actionSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 export type GitAction = z.output<typeof actionSchema>;
+
+/**
+ * Read-only preview for the update-branch dialog. `operation` decides the
+ * direction of the count: merge counts commits the source branch brings in
+ * (HEAD..<branch>), rebase counts commits of the current branch that would
+ * move onto the target (<branch>..HEAD). Later tickets extend the output
+ * with conflict pre-check data; failures (unknown ref, empty repo) come
+ * back as an ok/error union so the dialog can degrade quietly.
+ */
+export const mergePreviewRpc = defineRpc({
+  name: "git.merge-preview",
+  input: z.object({
+    cwd: z.string().min(1),
+    repo: z.string(),
+    branch: z.string().min(1),
+    operation: z.enum(["merge", "rebase"]),
+  }),
+  output: z.union([
+    z.object({
+      ok: z.literal(true),
+      commitCount: z.number().int().nonnegative(),
+      /** merge：冲突文件列表（空=无冲突）；rebase 或预检不可用时为 null。 */
+      conflicts: z.array(z.string()).nullable(),
+      /** merge 冲突预演是否可用（git < 2.38 无 --write-tree 时为 false）。rebase 恒为 false。 */
+      previewSupported: z.boolean(),
+      /** 工作区是否干净（无未提交更改）。 */
+      workspaceClean: z.boolean(),
+    }),
+    z.object({ ok: z.literal(false), error: failureSchema }),
+  ]),
+});
 
 export const actionRpc = defineRpc({
   name: "git.action",
@@ -369,7 +405,13 @@ export const actionRpc = defineRpc({
       snapshot: snapshotSchema,
       output: z.string().optional(),
     }),
-    z.object({ ok: z.literal(false), error: failureSchema }),
+    z.object({
+      ok: z.literal(false),
+      error: failureSchema.extend({
+        /** 冲突类失败的冲突文件清单（从 git 输出解析）；非冲突失败无此字段。 */
+        conflicts: z.array(z.string()).optional(),
+      }),
+    }),
   ]),
 });
 
