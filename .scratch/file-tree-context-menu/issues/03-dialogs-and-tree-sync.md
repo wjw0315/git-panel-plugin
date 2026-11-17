@@ -7,3 +7,8 @@
 **Status:** ready-for-agent
 
 **测试:** 组件测试覆盖对话框流转与 RPC 入参、成功刷新（展开态保持）、失败 toast、脏草稿保护路径。先例 `tests/files-tab.test.tsx`（modal 断言）、`tests/files-responsive.test.tsx`（树状态）。
+
+## Comments
+
+**2026-11-17 实现完成**（本会话）：
+- 对话框与树联动随 7e1c0cc 落地：Modal+TextInput、当前打开文件 flush 保护、rename 预览跟随（组件测试覆盖）、useFsOp 成功后失效 dir/snapshot 缓存（展开态在组件 state，不受影响）。

@@ -7,3 +7,8 @@
 **Status:** ready-for-agent
 
 **测试:** 设置开关读写（先例 `tests/settings-schema.test.tsx`）；服务端 argv 构造断言已在 01 覆盖，此处补客户端置灰与失败 toast 渲染用例。
+
+## Comments
+
+**2026-11-17 实现完成**（本会话）：
+- 系统 opener 随 567238f（服务端 spawn + 平台 argv）+ 7e1c0cc（allowSystemOpen 设置开关行）落地；opener-unavailable 映射「远程环境」提示。macOS open/open -R 真机待用户在 Paseo 内实测。

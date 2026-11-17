@@ -9,3 +9,8 @@
 **测试:** FilesTab 组件测试 + RPC 桩：分类型项集与分组、两种触发、复制路径、保存禁用态、遮罩/Esc 关闭。先例 `tests/files-tab.test.tsx`。
 
 **参考:** 分支 `prototype/file-tree-context-menu`（形态 primary source，含 onContextMenu 强转写法）；评审稿 `prototype.html?variant=B`。
+
+## Comments
+
+**2026-11-17 实现完成**（本会话）：
+- UI 落地：commit 7e1c0cc（client/context-menu.tsx 正式模块 + files.tsx 三处接线 + api useFsOp + strings 双语）；组件测试 commit 51964fd（9 条：项集/双触发/Esc/复制路径/禁用态/失败 toast）。⚠️ 宿主是否透传桌面右键仍需真机实测（组件测试用的是桩透传，不证明宿主行为）；长按为兜底。

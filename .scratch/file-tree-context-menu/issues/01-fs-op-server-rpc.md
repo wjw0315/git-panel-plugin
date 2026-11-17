@@ -9,3 +9,8 @@
 **测试:** 本仓首批服务端测试接缝——fs-op 模块对真实临时目录直测（逃逸/.git/已存在/嵌套仓库/上限/跨目录 rename 拒绝；reveal/open 断言平台 argv 构造 + spawn 打桩）。测试文件 `.test.tsx` 命名套现有 vitest include。
 
 **参考:** 分支 `prototype/file-tree-context-menu` 的 `client/context-menu-prototype.tsx`（动作语义打桩面）；`server/files.ts`（原子写先例）、`server/actions.ts`（错误归一化 + 嵌套仓库探测先例）。
+
+## Comments
+
+**2026-11-17 实现完成**（本会话）：
+- 服务端落地：commit 567238f（fsOpSchema + server/fsops.ts + index.server.ts 注册 + allowSystemOpen 设置）；服务端测试接缝 tests/fsops.test.tsx 19 用例（临时目录直测 + 平台 argv 断言）。
