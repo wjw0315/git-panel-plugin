@@ -28,7 +28,7 @@ type StubProps = Record<string, unknown> & {
  */
 const layoutHandlers = new WeakMap<Element, (event: unknown) => void>();
 
-const longPressHandlers = new WeakMap<Element, () => void>();
+const longPressHandlers = new WeakMap<Element, (event?: unknown) => void>();
 
 /** 测试触发行的长按（上下文菜单的移动端入口）；event 模拟 RN 的 nativeEvent。 */
 export function fireLongPress(element: Element, event?: { pageX: number; pageY: number }): void {
