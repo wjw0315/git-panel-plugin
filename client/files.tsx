@@ -5,7 +5,6 @@ import { Icon, Markdown, useToast } from "@getpaseo/plugin/client/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import { useDirQuery, useFileQuery, useFileWrite, useGitApi } from "./api";
-import { ProtoInlineRow, useContextMenuPrototype } from "./context-menu-prototype";
 import { Editor } from "./editor";
 import { createAutosave, type AutosaveController, type SaveStatus } from "./editor/autosave";
 import { PlainTextEditor } from "./editor/plain-text";
@@ -150,9 +149,6 @@ export function FilesTab({
   );
 
   const dirty = Boolean(editing && file.data?.ok && draft !== savedContent.current);
-
-  // ⚠️ 原型接线（client/context-menu-prototype.tsx）：验证完上下文菜单形态后整块移除。
-  const proto = useContextMenuPrototype({ theme, openPath: selected, dirty });
 
   useEffect(() => {
     editingRef.current = editing;
@@ -388,14 +384,9 @@ export function FilesTab({
             accessibilityRole="button"
             accessibilityLabel={row.path}
             onPress={() => {
-              if (proto.isInline(row.path)) {
-                proto.closeInline();
-                return;
-              }
               if (row.entry.dir) toggleDir(row.path);
               else void openFile(row.path);
             }}
-            {...proto.rowPress({ path: row.path, name: row.entry.name, isDir: row.entry.dir })}
             style={({ pressed }) => ({
               flexDirection: "row",
               alignItems: "center",
@@ -407,16 +398,6 @@ export function FilesTab({
               opacity: row.entry.ignored ? 0.55 : 1,
             })}
           >
-            {proto.isInline(row.path) ? (
-              <ProtoInlineRow
-                theme={theme}
-                row={{ path: row.path, name: row.entry.name, isDir: row.entry.dir }}
-                dirtyOpen={dirty && selected === row.path}
-                onPick={proto.inlinePick}
-                onClose={proto.closeInline}
-              />
-            ) : (
-              <>
             {row.entry.dir ? (
               <Icon
                 name={expanded.has(row.path) ? "ChevronDown" : "ChevronRight"}
@@ -463,8 +444,6 @@ export function FilesTab({
             {loadingDir === row.path ? (
               <Text style={{ color: theme.colors.foregroundMuted, fontSize: 10 }}>…</Text>
             ) : null}
-              </>
-            )}
           </Pressable>
         ))}
         <PagedFooter
@@ -475,7 +454,6 @@ export function FilesTab({
           onPress={paged.showMore}
         />
       </ScrollView>
-      {proto.layer}
     </View>
   );
 
