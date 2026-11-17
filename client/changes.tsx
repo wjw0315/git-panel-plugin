@@ -156,6 +156,9 @@ export function ChangesTab({
   };
 
   const openDiff = (change: GitChange) => {
+    // 目录条目没有 diff：点了只会让服务端报 “<path> is not a file”。
+    // 服务端已把未跟踪目录展开成文件，这里只防御旧快照缓存等残留场景。
+    if (change.isDirectory) return;
     setSelected(change);
     setContext(3);
     if (!wide) setDiffOpen(true);

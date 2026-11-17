@@ -259,7 +259,7 @@ export async function buildSnapshot(
     mergeHeadResult,
     rebaseHeadResult,
   ] = await Promise.all([
-    git(root, ["status", "--porcelain=v1", "-z", "--untracked-files=normal"], {
+    git(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"], {
       timeout: 15_000,
     }),
     git(root, ["symbolic-ref", "--short", "-q", "HEAD"], { accept: [1, 128], timeout: 8_000 }),
