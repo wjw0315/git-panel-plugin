@@ -649,6 +649,7 @@ function FilePreview({
               <TextButton
                 theme={theme}
                 label={strings.discardDraft}
+                hint={strings.hintDiscardDraft}
                 onPress={onCancel}
                 danger
                 compact
@@ -684,8 +685,20 @@ function FilePreview({
           <Text style={{ color: theme.colors.foreground, fontSize: 11, flex: 1 }}>
             {strings.fileChanged}
           </Text>
-          <TextButton theme={theme} label={strings.reload} onPress={onReload} compact />
-          <TextButton theme={theme} label={strings.keepDraft} onPress={onKeepDraft} compact />
+          <TextButton
+            theme={theme}
+            label={strings.reload}
+            hint={strings.hintReloadFile}
+            onPress={onReload}
+            compact
+          />
+          <TextButton
+            theme={theme}
+            label={strings.keepDraft}
+            hint={strings.hintKeepDraft}
+            onPress={onKeepDraft}
+            compact
+          />
         </View>
       ) : null}
 

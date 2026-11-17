@@ -46,6 +46,35 @@ export interface Strings {
   commit: string;
   amend: string;
   amendHint: string;
+  hintNewBranch: string;
+  hintRefreshBranches: string;
+  hintCheckoutBranch: string;
+  hintCreateFromBranch: string;
+  hintCancel: string;
+  hintToggleView: string;
+  hintStashPush: string;
+  hintStageAll: string;
+  hintUnstageAll: string;
+  hintLoadMore: string;
+  hintCreateBranchFromName: string;
+  hintCreateTag: string;
+  hintResetSoft: string;
+  hintResetMixed: string;
+  hintResetHard: string;
+  hintConfirm: string;
+  hintExpandAll: string;
+  hintCollapse: string;
+  hintStageSelected: string;
+  hintUnstageSelected: string;
+  hintCommit: string;
+  hintStashApply: string;
+  hintStashPop: string;
+  hintStashDrop: string;
+  hintDiscardDraft: string;
+  hintReloadFile: string;
+  hintKeepDraft: string;
+  hintFilesTab: string;
+  hintRetry: string;
   lastCommitMessage: string;
   commitEmpty: string;
   commitDone: string;
@@ -198,6 +227,35 @@ const en: Strings = {
   commit: "Commit",
   amend: "Amend",
   amendHint: "Replace the previous commit",
+  hintNewBranch: "Create a branch from the current commit",
+  hintRefreshBranches: "Reload local and remote branches",
+  hintCheckoutBranch: "Switch the working tree to this branch",
+  hintCreateFromBranch: "Create a new branch starting at this branch",
+  hintCancel: "Close without changing anything",
+  hintToggleView: "Switch between flat and tree view",
+  hintStashPush: "Stash all uncommitted changes",
+  hintStageAll: "Stage every change in this section",
+  hintUnstageAll: "Move every staged change back to unstaged",
+  hintLoadMore: "Load older commits",
+  hintCreateBranchFromName: "Create the branch from this name and switch to it",
+  hintCreateTag: "Create a tag at the selected commit",
+  hintResetSoft: "Move HEAD only; keep changes staged",
+  hintResetMixed: "Move HEAD and unstage changes",
+  hintResetHard: "Move HEAD and discard all changes",
+  hintConfirm: "Run this action; it cannot be undone here",
+  hintExpandAll: "Show more surrounding lines in the diff",
+  hintCollapse: "Show fewer surrounding lines in the diff",
+  hintStageSelected: "Stage the selected files",
+  hintUnstageSelected: "Move the selected files back to unstaged",
+  hintCommit: "Commit all staged changes",
+  hintStashApply: "Apply this stash and keep it in the list",
+  hintStashPop: "Apply this stash and remove it from the list",
+  hintStashDrop: "Delete this stash without applying it",
+  hintDiscardDraft: "Throw away the unsaved edits in the editor",
+  hintReloadFile: "Reload the file from disk, discarding the draft",
+  hintKeepDraft: "Keep the draft and close this prompt",
+  hintFilesTab: "Open the file browser for this workspace",
+  hintRetry: "Run the failed request again",
   lastCommitMessage: "Last commit message",
   commitEmpty: "Write a commit message first",
   commitDone: "Commit created",
@@ -350,6 +408,35 @@ const zh: Strings = {
   commit: "提交",
   amend: "修补",
   amendHint: "替换上一条提交",
+  hintNewBranch: "基于当前提交创建新分支",
+  hintRefreshBranches: "重新加载本地与远端分支",
+  hintCheckoutBranch: "把工作区切换到该分支",
+  hintCreateFromBranch: "从该分支创建新分支",
+  hintCancel: "关闭弹窗，不做任何更改",
+  hintToggleView: "在平铺视图与目录树视图之间切换",
+  hintStashPush: "暂存所有未提交的变更",
+  hintStageAll: "暂存这一组的全部变更",
+  hintUnstageAll: "把这一组已暂存变更移回未暂存",
+  hintLoadMore: "加载更早的提交",
+  hintCreateBranchFromName: "按输入的名称创建分支并切换过去",
+  hintCreateTag: "在选中的提交上创建标签",
+  hintResetSoft: "只移动 HEAD，改动保留在暂存区",
+  hintResetMixed: "移动 HEAD，并把改动移回未暂存",
+  hintResetHard: "移动 HEAD 并丢弃所有改动",
+  hintConfirm: "执行该操作，面板内无法撤销",
+  hintExpandAll: "在差异中显示更多上下文",
+  hintCollapse: "在差异中减少上下文行数",
+  hintStageSelected: "暂存选中的文件",
+  hintUnstageSelected: "把选中文件移回未暂存",
+  hintCommit: "提交所有已暂存变更",
+  hintStashApply: "应用该 stash，并保留在列表中",
+  hintStashPop: "应用该 stash 并从列表移除",
+  hintStashDrop: "删除该 stash，不应用改动",
+  hintDiscardDraft: "丢弃编辑器里未保存的修改",
+  hintReloadFile: "从磁盘重新加载文件，丢弃草稿",
+  hintKeepDraft: "保留草稿并关闭提示",
+  hintFilesTab: "打开该工作区的文件浏览",
+  hintRetry: "重新执行失败的请求",
   lastCommitMessage: "上一条提交信息",
   commitEmpty: "请先填写提交信息",
   commitDone: "提交成功",

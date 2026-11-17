@@ -199,12 +199,14 @@ export function ChangesTab({
           theme={theme}
           icon={view === "tree" ? "ListTree" : "List"}
           label={strings.changesView}
+          hint={strings.hintToggleView}
           onPress={() => setView((value) => (value === "tree" ? "flat" : "tree"))}
         />
         <IconButton
           theme={theme}
           icon="Archive"
           label={strings.stashPush}
+          hint={strings.hintStashPush}
           onPress={() => setStashOpen(true)}
         />
       </View>
@@ -228,6 +230,7 @@ export function ChangesTab({
             <TextButton
               theme={theme}
               label={strings.stage}
+              hint={strings.hintStageSelected}
               compact
               disabled={action.isPending}
               onPress={() =>
@@ -242,6 +245,7 @@ export function ChangesTab({
             <TextButton
               theme={theme}
               label={strings.unstage}
+              hint={strings.hintUnstageSelected}
               compact
               disabled={action.isPending}
               onPress={() =>
@@ -276,6 +280,7 @@ export function ChangesTab({
                     theme={theme}
                     icon="Undo2"
                     label={strings.unstageAll}
+                    hint={strings.hintUnstageAll}
                     onPress={() => runGit({ kind: "unstageAll" })}
                   />
                 }
@@ -328,6 +333,7 @@ export function ChangesTab({
                     theme={theme}
                     icon="Plus"
                     label={strings.stageAll}
+                    hint={strings.hintStageAll}
                     onPress={() => runGit({ kind: "stageAll" })}
                   />
                 }
@@ -514,6 +520,7 @@ export function ChangesTab({
           <TextButton
             theme={theme}
             label={strings.commit}
+            hint={strings.hintCommit}
             primary
             disabled={!canCommit}
             onPress={doCommit}
@@ -542,6 +549,7 @@ export function ChangesTab({
             <TextButton
               theme={theme}
               label={context === 3 ? strings.expandAll : strings.collapse}
+              hint={context === 3 ? strings.hintExpandAll : strings.hintCollapse}
               compact
               onPress={() => setContext((value) => (value === 3 ? 2000 : 3))}
               disabled={!selected || diff.isFetching}
@@ -564,6 +572,7 @@ export function ChangesTab({
               <TextButton
                 theme={theme}
                 label={context === 3 ? strings.expandAll : strings.collapse}
+                hint={context === 3 ? strings.hintExpandAll : strings.hintCollapse}
                 compact
                 onPress={() => setContext((value) => (value === 3 ? 2000 : 3))}
                 disabled={diff.isFetching}
@@ -599,6 +608,7 @@ export function ChangesTab({
             <TextButton
               theme={theme}
               label={strings.stashPush}
+              hint={strings.hintStashPush}
               primary
               disabled={action.isPending || snapshot.changes.length === 0}
               onPress={() => {
@@ -632,6 +642,7 @@ export function ChangesTab({
                     <TextButton
                       theme={theme}
                       label={strings.stashApply}
+                      hint={strings.hintStashApply}
                       compact
                       disabled={action.isPending}
                       onPress={() =>
@@ -645,6 +656,7 @@ export function ChangesTab({
                     <TextButton
                       theme={theme}
                       label={strings.stashPop}
+                      hint={strings.hintStashPop}
                       compact
                       disabled={action.isPending}
                       onPress={() =>
@@ -658,6 +670,7 @@ export function ChangesTab({
                     <TextButton
                       theme={theme}
                       label={strings.stashDrop}
+                      hint={strings.hintStashDrop}
                       compact
                       danger
                       disabled={action.isPending}
@@ -693,10 +706,16 @@ export function ChangesTab({
           <View style={{ gap: 12 }}>
             <Text style={{ color: theme.colors.foreground, fontSize: 13 }}>{confirm?.body}</Text>
             <View style={{ flexDirection: "row", gap: 8, justifyContent: "flex-end" }}>
-              <TextButton theme={theme} label={strings.cancel} onPress={() => setConfirm(null)} />
+              <TextButton
+                theme={theme}
+                label={strings.cancel}
+                hint={strings.hintCancel}
+                onPress={() => setConfirm(null)}
+              />
               <TextButton
                 theme={theme}
                 label={confirm?.label ?? strings.confirm}
+                hint={strings.hintConfirm}
                 danger={confirm?.danger}
                 onPress={() => {
                   confirm?.run();

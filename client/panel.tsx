@@ -381,6 +381,7 @@ function GitPanelBody({
         <TextButton
           theme={theme}
           label={strings.files}
+          hint={strings.hintFilesTab}
           onPress={() => selectTab("files")}
           compact
         />
@@ -395,7 +396,13 @@ function GitPanelBody({
           {snapshotError?.message ??
             (snapshot.error instanceof Error ? snapshot.error.message : strings.operationFailed)}
         </Text>
-        <TextButton theme={theme} label={strings.retry} onPress={onRefresh} compact />
+        <TextButton
+          theme={theme}
+          label={strings.retry}
+          hint={strings.hintRetry}
+          onPress={onRefresh}
+          compact
+        />
       </View>
     );
   } else if (snapshotValue && state.tab === "overview") {

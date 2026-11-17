@@ -329,6 +329,8 @@ export const actionSchema = z.discriminatedUnion("kind", [
     kind: z.literal("checkout"),
     name: z.string().min(1),
     createFrom: z.string().optional(),
+    /** name 是远端 ref（origin/xxx）；本地没有同名分支时创建跟踪分支。 */
+    track: z.boolean().optional(),
   }),
   z.object({ kind: z.literal("fetch") }),
   z.object({ kind: z.literal("pull") }),

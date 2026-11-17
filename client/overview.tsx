@@ -40,7 +40,7 @@ export function OverviewTab({
   const [debounced, setDebounced] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [branchOpen, setBranchOpen] = useState(false);
-  const [branchAction, setBranchAction] = useState<string | null>(null);
+  const [branchAction, setBranchAction] = useState<{ name: string; track: boolean } | null>(null);
   const [createFrom, setCreateFrom] = useState<string | null>(null);
   const [newBranch, setNewBranch] = useState("");
   const [tagFor, setTagFor] = useState<string | null>(null);
@@ -115,9 +115,9 @@ export function OverviewTab({
       strings={strings}
       data={refs.data}
       current={snapshot.branch}
-      onPick={(name) => {
+      onPick={(name, track) => {
         setBranchOpen(false);
-        setBranchAction(name);
+        setBranchAction({ name, track: track === true });
       }}
       onCreate={() => {
         setBranchOpen(false);
@@ -251,6 +251,7 @@ export function OverviewTab({
                   <TextButton
                     theme={theme}
                     label={history.isFetching ? strings.loading : strings.loadMore}
+                    hint={strings.hintLoadMore}
                     onPress={() => setLimit((value) => value + 80)}
                     disabled={history.isFetching}
                     compact
@@ -334,31 +335,39 @@ export function OverviewTab({
         onOpenChange={(open) => {
           if (!open) setBranchAction(null);
         }}
-        title={branchAction ?? strings.branches}
+        title={branchAction?.name ?? strings.branches}
         icon={<Icon name="GitBranch" size={18} color={theme.colors.foreground} />}
       >
         <Modal.Content>
           <View style={{ gap: 10 }}>
-            {branchAction === snapshot.branch ? (
+            {branchAction?.name === snapshot.branch ? (
               <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
                 {strings.branch}: {snapshot.branch}
               </Text>
             ) : null}
             <TextButton
               theme={theme}
-              label={`${strings.checkout} ${branchAction ?? ""}`}
+              label={`${strings.checkout} ${branchAction?.name ?? ""}`}
+              hint={strings.hintCheckoutBranch}
               onPress={() => {
-                if (branchAction) runGit({ kind: "checkout", name: branchAction });
+                if (branchAction) {
+                  runGit({
+                    kind: "checkout",
+                    name: branchAction.name,
+                    track: branchAction.track || undefined,
+                  });
+                }
                 setBranchAction(null);
               }}
               primary
-              disabled={action.isPending || branchAction === snapshot.branch}
+              disabled={action.isPending || branchAction?.name === snapshot.branch}
             />
             <TextButton
               theme={theme}
               label={strings.createBranch}
+              hint={strings.hintCreateFromBranch}
               onPress={() => {
-                setCreateFrom(branchAction);
+                setCreateFrom(branchAction?.name ?? null);
                 setNewBranch("");
                 setBranchAction(null);
               }}
@@ -367,6 +376,7 @@ export function OverviewTab({
             <TextButton
               theme={theme}
               label={strings.cancel}
+              hint={strings.hintCancel}
               onPress={() => setBranchAction(null)}
             />
           </View>
@@ -395,10 +405,16 @@ export function OverviewTab({
               style={inputStyle(theme)}
             />
             <View style={{ flexDirection: "row", gap: 8, justifyContent: "flex-end" }}>
-              <TextButton theme={theme} label={strings.cancel} onPress={() => setCreateFrom(null)} />
+              <TextButton
+                theme={theme}
+                label={strings.cancel}
+                hint={strings.hintCancel}
+                onPress={() => setCreateFrom(null)}
+              />
               <TextButton
                 theme={theme}
                 label={strings.createBranch}
+                hint={strings.hintCreateBranchFromName}
                 primary
                 disabled={newBranch.trim() === "" || action.isPending}
                 onPress={() => {
@@ -443,10 +459,16 @@ export function OverviewTab({
               style={inputStyle(theme)}
             />
             <View style={{ flexDirection: "row", gap: 8, justifyContent: "flex-end" }}>
-              <TextButton theme={theme} label={strings.cancel} onPress={() => setTagFor(null)} />
+              <TextButton
+                theme={theme}
+                label={strings.cancel}
+                hint={strings.hintCancel}
+                onPress={() => setTagFor(null)}
+              />
               <TextButton
                 theme={theme}
                 label={strings.tagCreate}
+                hint={strings.hintCreateTag}
                 primary
                 disabled={tagName.trim() === "" || tagFor === null || action.isPending}
                 onPress={() => {
@@ -483,6 +505,13 @@ export function OverviewTab({
                 key={mode}
                 theme={theme}
                 label={strings[`reset${mode[0]?.toUpperCase()}${mode.slice(1)}` as "resetSoft"]}
+                hint={
+                  mode === "soft"
+                    ? strings.hintResetSoft
+                    : mode === "mixed"
+                      ? strings.hintResetMixed
+                      : strings.hintResetHard
+                }
                 danger={mode === "hard"}
                 onPress={() => {
                   if (resetFor) runGit({ kind: "reset", commit: resetFor, mode });
@@ -491,7 +520,12 @@ export function OverviewTab({
                 disabled={action.isPending}
               />
             ))}
-            <TextButton theme={theme} label={strings.cancel} onPress={() => setResetFor(null)} />
+            <TextButton
+              theme={theme}
+              label={strings.cancel}
+              hint={strings.hintCancel}
+              onPress={() => setResetFor(null)}
+            />
           </View>
         </Modal.Content>
       </Modal>
@@ -508,10 +542,16 @@ export function OverviewTab({
           <View style={{ gap: 12 }}>
             <Text style={{ color: theme.colors.foreground, fontSize: 13 }}>{confirm?.body}</Text>
             <View style={{ flexDirection: "row", gap: 8, justifyContent: "flex-end" }}>
-              <TextButton theme={theme} label={strings.cancel} onPress={() => setConfirm(null)} />
+              <TextButton
+                theme={theme}
+                label={strings.cancel}
+                hint={strings.hintCancel}
+                onPress={() => setConfirm(null)}
+              />
               <TextButton
                 theme={theme}
                 label={confirm?.label ?? strings.confirm}
+                hint={strings.hintConfirm}
                 danger={confirm?.danger}
                 onPress={() => {
                   confirm?.run();
@@ -554,6 +594,7 @@ export function OverviewTab({
               <TextButton
                 theme={theme}
                 label={diffContext === 3 ? strings.expandAll : strings.collapse}
+                hint={diffContext === 3 ? strings.hintExpandAll : strings.hintCollapse}
                 compact
                 onPress={() => setDiffContext((value) => (value === 3 ? 2000 : 3))}
                 disabled={diff.isFetching}
@@ -579,7 +620,7 @@ function inputStyle(theme: PluginTheme) {
   };
 }
 
-function BranchesPane({
+export function BranchesPane({
   theme,
   strings,
   data,
@@ -600,7 +641,7 @@ function BranchesPane({
       }
     | undefined;
   current: string | null;
-  onPick: (name: string) => void;
+  onPick: (name: string, track?: boolean) => void;
   onCreate: () => void;
   onRefresh: () => void;
 }) {
@@ -617,8 +658,20 @@ function BranchesPane({
       >
         <SectionLabel theme={theme}>{strings.branches}</SectionLabel>
         <View style={{ flexDirection: "row", gap: 2 }}>
-          <IconButton theme={theme} icon="Plus" label={strings.createBranch} onPress={onCreate} />
-          <IconButton theme={theme} icon="RefreshCw" label={strings.refresh} onPress={onRefresh} />
+          <IconButton
+            theme={theme}
+            icon="Plus"
+            label={strings.createBranch}
+            hint={strings.hintNewBranch}
+            onPress={onCreate}
+          />
+          <IconButton
+            theme={theme}
+            icon="RefreshCw"
+            label={strings.refresh}
+            hint={strings.hintRefreshBranches}
+            onPress={onRefresh}
+          />
         </View>
       </View>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 12 }}>
@@ -630,7 +683,7 @@ function BranchesPane({
                 key={branch.name}
                 accessibilityRole="button"
                 accessibilityLabel={branch.name}
-                onPress={() => onPick(branch.name.split("/").slice(1).join("/") || branch.name)}
+                onPress={() => onPick(branch.name)}
                 style={({ pressed }) => ({
                   flexDirection: "row",
                   alignItems: "center",
@@ -683,7 +736,7 @@ function BranchesPane({
                 key={branch.name}
                 accessibilityRole="button"
                 accessibilityLabel={branch.name}
-                onPress={() => onPick(branch.name.split("/").slice(1).join("/") || branch.name)}
+                onPress={() => onPick(branch.name, true)}
                 style={({ pressed }) => ({
                   paddingHorizontal: 12,
                   paddingVertical: 4,

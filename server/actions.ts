@@ -132,6 +132,19 @@ export async function runAction(input: ActionInput): Promise<ActionOutput> {
         if (action.createFrom) {
           const result = await git(root, ["switch", "-c", action.name, action.createFrom]);
           output = `${result.stdout}${result.stderr}`;
+        } else if (action.track) {
+          const slash = action.name.indexOf("/");
+          const localName = slash === -1 ? action.name : action.name.slice(slash + 1);
+          const existing = await git(
+            root,
+            ["rev-parse", "--verify", "--quiet", `refs/heads/${localName}`],
+            { accept: [1, 128] },
+          );
+          const result =
+            existing.code === 0
+              ? await git(root, ["switch", localName])
+              : await git(root, ["switch", "--track", action.name]);
+          output = `${result.stdout}${result.stderr}`;
         } else {
           const result = await git(root, ["switch", action.name]);
           output = `${result.stdout}${result.stderr}`;
