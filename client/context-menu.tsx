@@ -4,7 +4,7 @@ import { Icon, Modal, TextInput, copyText, useToast } from "@getpaseo/plugin/cli
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
 import { Text } from "react-native";
-import { useFsOp } from "./api";
+import { useErrorReport, useFsOp } from "./api";
 import type { Strings } from "./strings";
 import type { FsOp } from "../shared/git";
 
@@ -128,6 +128,8 @@ export function useContextMenu({
 }) {
   const toast = useToast();
   const fsop = useFsOp(cwd, repo);
+  // [DEBUG-mob1] 真机定位观察：上报触发方式/坐标/测量帧，复验后整段删除。
+  const debugReport = useErrorReport();
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -172,6 +174,14 @@ export function useContextMenu({
   const openMenu = (row: MenuRow, trigger: string, x?: number, y?: number) => {
     setMenu({ row, trigger, x: x ?? null, y: y ?? null });
     setPaneFrame(null);
+    try {
+      debugReport({
+        surface: "[DEBUG-mob1] openMenu",
+        message: JSON.stringify({ trigger, x: x ?? null, y: y ?? null, anchored: x != null && y != null }),
+      });
+    } catch {
+      // 插桩绝不打断业务
+    }
     if (x != null && y != null) {
       // 变体 B 需要树面板的窗口原点换算锚点；下一帧测量等布局稳定，
       // 测量完成（setPaneFrame）前菜单以 opacity 0 占位，不闪错误位置。
@@ -322,7 +332,12 @@ export function useContextMenu({
 
   const rowPress = (row: MenuRow): PressableProps => {
     return {
-      onLongPress: () => openMenu(row, "longpress"),
+      // 长按事件自带 pageX/pageY（RN native 与 RN-web 均有）：读坐标走锚定路径，
+      // 不再依赖面板底部 fallback（手机宿主布局里 fallback 会落到可视区外）。
+      onLongPress: (event: unknown) => {
+        const native = (event as { nativeEvent?: { pageX?: number; pageY?: number } }).nativeEvent;
+        openMenu(row, "longpress", native?.pageX, native?.pageY);
+      },
       // 宿主若不透传右键，此 prop 静默无效，长按仍可用（spec 触发决策）。
       ...( {
         onContextMenu: (event: unknown) => {
@@ -371,7 +386,9 @@ export function useContextMenu({
             testID="context-menu"
             style={{
               position: "absolute",
-              ...(menuLeft != null && menuTop != null ? { left: menuLeft, top: menuTop } : { left: 40, right: 40, bottom: 60 }),
+              ...(menuLeft != null && menuTop != null
+                ? { left: menuLeft, top: menuTop }
+                : { left: 40, right: 40, top: 80 }),
               width: menuLeft != null ? 220 : undefined,
               opacity: menuVisible ? 1 : 0,
               backgroundColor: theme.colors.surface0,

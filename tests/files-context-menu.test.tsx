@@ -69,6 +69,9 @@ function installRpc(overrides?: { fsOp?: (input: Record<string, unknown>) => unk
         tooLarge: false,
       })) as unknown as RpcHandler;
     }
+    if (name === "git.panel-error") {
+      return (async () => ({ ok: true })) as unknown as RpcHandler;
+    }
     if (name === "git.fs-op") {
       return (async (input: { op: Record<string, unknown> }) => {
         calls.push({ name, input: input.op });
@@ -329,5 +332,41 @@ describe("上下文菜单：锚定定位（回归：不跟手/跑位）", () => 
     mockWindowOrigin.y = 0;
     mockWindowOrigin.width = 0;
     mockWindowOrigin.height = 0;
+  });
+});
+
+describe("上下文菜单：移动端长按定位（回归：跑到屏幕下面）", () => {
+  it("长按 event 带 pageX/pageY 时走锚定坐标路径", async () => {
+    mockWindowOrigin.x = 0;
+    mockWindowOrigin.y = 0;
+    mockWindowOrigin.width = 360;
+    mockWindowOrigin.height = 640;
+    installRpc();
+    mount(newClient());
+    expect(await screen.findByText("src")).toBeTruthy();
+    await settle();
+    // 手机长按：native pageX/pageY（相对视口）
+    fireLongPress(row("src"), { pageX: 120, pageY: 200 });
+    await settle(0);
+    const menu = screen.getByTestId("context-menu");
+    const style = (menu as HTMLElement).style;
+    await settle();
+    expect(parseFloat(style.left)).toBeCloseTo(112, 0); // 120-0-8
+    expect(parseFloat(style.top)).toBeCloseTo(206, 0); // 200-0+6
+    mockWindowOrigin.width = 0;
+    mockWindowOrigin.height = 0;
+  });
+
+  it("长按无坐标时 fallback 落在面板顶部区（top 定位，不落底部）", async () => {
+    installRpc();
+    mount(newClient());
+    expect(await screen.findByText("src")).toBeTruthy();
+    await settle();
+    fireLongPress(row("src")); // 无 event：坐标缺失
+    await settle();
+    const menu = screen.getByTestId("context-menu");
+    const style = (menu as HTMLElement).style;
+    expect(style.top).toBe("80px");
+    expect(style.bottom).toBe(""); // 不得再用 bottom 锚定（手机上会落到可视区外）
   });
 });
