@@ -277,6 +277,40 @@ export const fileWriteRpc = defineRpc({
   ]),
 });
 
+/**
+ * 文件树上下文菜单操作（spec: .scratch/file-tree-context-menu/spec.md）。
+ * 写操作（createFile/createDir/rename/delete/upload）受 `allowFileEdit` 闸；
+ * 系统打开器（reveal/open）受 `allowSystemOpen` 闸。路径全部仓库相对，安全校验在服务端。
+ */
+export const fsOpSchema = z.union([
+  z.object({ kind: z.literal("createFile"), parentPath: z.string().default(""), name: z.string().min(1) }),
+  z.object({ kind: z.literal("createDir"), parentPath: z.string().default(""), name: z.string().min(1) }),
+  /** 仅同目录改名：path 的父目录即目标目录，newName 为纯名称。 */
+  z.object({ kind: z.literal("rename"), path: z.string().min(1), newName: z.string().min(1) }),
+  z.object({ kind: z.literal("delete"), path: z.string().min(1) }),
+  z.object({ kind: z.literal("upload"), parentPath: z.string().default(""), name: z.string().min(1), contentBase64: z.string().min(1) }),
+  z.object({ kind: z.literal("reveal"), path: z.string().min(1) }),
+  z.object({ kind: z.literal("open"), path: z.string().min(1) }),
+]);
+export type FsOp = z.output<typeof fsOpSchema>;
+
+export const fsOpRpc = defineRpc({
+  name: "git.fs-op",
+  input: z.object({
+    cwd: z.string().min(1),
+    repo: z.string(),
+    op: fsOpSchema,
+  }),
+  output: z.union([
+    z.object({
+      ok: z.literal(true),
+      /** 受影响目录（仓库相对、POSIX）；客户端按它局部刷新树。 */
+      affectedDir: z.string(),
+    }),
+    z.object({ ok: z.literal(false), error: failureSchema }),
+  ]),
+});
+
 export const lastMessageRpc = defineRpc({
   name: "git.last-message",
   input: z.object({ cwd: z.string().min(1), repo: z.string() }),
@@ -426,6 +460,8 @@ export const gitPanelSettings = defineSettings({
     changesView: z.enum(["flat", "tree"]).default("flat"),
     refreshIntervalMs: z.number().int().min(0).max(60000).default(5000),
     allowFileEdit: z.boolean().default(true),
+    /** 系统 opener（在 Finder 中显示 / 用默认应用打开）开关；远程 daemon 场景可关。 */
+    allowSystemOpen: z.boolean().default(true),
     filesFollowRepo: z.boolean().default(false),
     autoSaveFile: z.boolean().default(true),
     editorSyntaxHighlight: z.boolean().default(true),
@@ -439,6 +475,7 @@ export const DEFAULT_SETTINGS: GitPanelSettings = {
   changesView: "flat",
   refreshIntervalMs: 5000,
   allowFileEdit: true,
+  allowSystemOpen: true,
   filesFollowRepo: false,
   autoSaveFile: true,
   editorSyntaxHighlight: true,

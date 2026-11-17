@@ -5,6 +5,7 @@ import {
   dirListRpc,
   fileContentRpc,
   fileWriteRpc,
+  fsOpRpc,
   gitPanelSettings,
   historyRpc,
   lastMessageRpc,
@@ -18,6 +19,7 @@ import {
 } from "./shared/git";
 import { runAction } from "./server/actions";
 import { getDiff } from "./server/diff";
+import { runFsOp } from "./server/fsops";
 import { getFileContent, listDirectory, writeFileContent } from "./server/files";
 import { getHistory, getLastMessage, getRefs, getStashList } from "./server/history";
 import { getMergePreview } from "./server/merge";
@@ -45,6 +47,11 @@ export default function contribute(server: PluginServerContext) {
   async function allowFileEdit(): Promise<boolean> {
     const state = await settings.read();
     return state.status === "ready" ? state.values.allowFileEdit : true;
+  }
+
+  async function allowSystemOpen(): Promise<boolean> {
+    const state = await settings.read();
+    return state.status === "ready" ? state.values.allowSystemOpen : true;
   }
 
   server.handle(reposRpc, async ({ cwd }) => listRepos(cwd));
@@ -104,6 +111,11 @@ export default function contribute(server: PluginServerContext) {
       return { ok: false as const, error: failure(error) };
     }
   });
+
+  server.handle(fsOpRpc, async (input) => runFsOp(input, {
+    allowEdit: await allowFileEdit(),
+    allowSystemOpen: await allowSystemOpen(),
+  }));
 
   server.handle(panelErrorRpc, async (input) => {
     // One line per crash so `paseo plugin logs git-panel` shows what the
