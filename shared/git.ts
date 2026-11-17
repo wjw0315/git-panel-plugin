@@ -224,6 +224,8 @@ export const dirListRpc = defineRpc({
   }),
   output: z.object({
     path: z.string(),
+    /** 浏览根的绝对路径（daemon 机器上）；客户端拼「复制绝对路径」用。 */
+    root: z.string(),
     entries: z.array(
       z.object({
         name: z.string(),

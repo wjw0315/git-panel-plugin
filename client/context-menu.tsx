@@ -43,11 +43,28 @@ function posixJoin(parent: string, name: string): string {
   return parent === "" ? name : `${parent}/${name}`;
 }
 
-function menuActions(row: MenuRow, strings: Strings, canSave: boolean, canUpload: boolean): MenuAction[] {
+function menuActions(
+  row: MenuRow,
+  strings: Strings,
+  canSave: boolean,
+  canUpload: boolean,
+  absoluteRoot: string | null,
+): MenuAction[] {
+  const copyActions: MenuAction[] = [
+    { key: "copy-path-rel", label: strings.contextCopyPathRelative, icon: "Link", group: 1 },
+    {
+      key: "copy-path-abs",
+      label: strings.contextCopyPathAbsolute,
+      icon: "Link2",
+      group: 1,
+      // 绝对路径需要 daemon 仓库根（dir-list 下发）；未拿到时禁用
+      disabled: !absoluteRoot,
+    },
+  ];
   if (row.isDir) {
     return [
       { key: "rename", label: strings.contextRename, icon: "Pencil", group: 1 },
-      { key: "copy-path", label: strings.contextCopyPath, icon: "Link", group: 1 },
+      ...copyActions,
       { key: "reveal", label: strings.contextReveal, icon: "FolderOpen", group: 1 },
       { key: "newFile", label: strings.contextNewFile, icon: "FilePlus", group: 2 },
       { key: "newFolder", label: strings.contextNewFolder, icon: "FolderPlus", group: 2 },
@@ -59,12 +76,17 @@ function menuActions(row: MenuRow, strings: Strings, canSave: boolean, canUpload
   }
   return [
     { key: "rename", label: strings.contextRename, icon: "Pencil", group: 1 },
-    { key: "copy-path", label: strings.contextCopyPath, icon: "Link", group: 1 },
+    ...copyActions,
     { key: "save", label: strings.save, icon: "Save", group: 1, disabled: !canSave },
     { key: "reveal", label: strings.contextReveal, icon: "FolderOpen", group: 2 },
     { key: "open", label: strings.contextOpenWith, icon: "ExternalLink", group: 2 },
     { key: "delete", label: strings.delete, icon: "Trash2", group: 3, danger: true },
   ];
+}
+
+/** daemon 仓库根 + 仓库相对路径 → 绝对路径（保留服务端原生分隔符，仅规整连接处）。 */
+function joinAbsolute(root: string, path: string): string {
+  return /[\\/]$/.test(root) ? root + path : `${root}/${path}`;
 }
 
 /** 前端先拦一层名称（服务端仍再拦）：拒绝空名、路径分隔符、. 与 .. 与 .git。 */
@@ -112,6 +134,7 @@ export function useContextMenu({
   repo,
   openPath,
   dirty,
+  absoluteRoot,
   onFlush,
   onOpenPath,
   onSave,
@@ -122,6 +145,8 @@ export function useContextMenu({
   repo: string;
   openPath: string | null;
   dirty: boolean;
+  /** daemon 仓库根绝对路径（dir-list 下发）；缺省时「复制绝对路径」禁用。 */
+  absoluteRoot: string | null;
   onFlush: () => Promise<boolean>;
   onOpenPath: (path: string | null) => void;
   onSave: () => void;
@@ -195,10 +220,14 @@ export function useContextMenu({
 
   const pick = async (action: MenuAction, row: MenuRow) => {
     if (action.disabled) return;
-    if (action.key === "copy-path") {
+    if (action.key === "copy-path-rel" || action.key === "copy-path-abs") {
+      const value =
+        action.key === "copy-path-abs" && absoluteRoot
+          ? joinAbsolute(absoluteRoot, row.path)
+          : row.path;
       try {
-        await copyText(row.path);
-        toast.show(strings.copied, { variant: "success" });
+        await copyText(value);
+        toast.show(value, { variant: "success" });
       } catch {
         toast.error(strings.operationFailed);
       }
@@ -325,9 +354,10 @@ export function useContextMenu({
             strings,
             dirty && openPath !== null && menu.row.path === openPath,
             canUpload,
+            absoluteRoot,
           )
         : [],
-    [menu, strings, dirty, openPath, canUpload],
+    [menu, strings, dirty, openPath, canUpload, absoluteRoot],
   );
 
   const rowPress = (row: MenuRow): PressableProps => {

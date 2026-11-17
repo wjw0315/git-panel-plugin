@@ -73,7 +73,7 @@ export async function listDirectory(input: DirListInput) {
     if (a.dir !== b.dir) return a.dir ? -1 : 1;
     return a.name.localeCompare(b.name);
   });
-  return { path: input.path, entries: result, truncated };
+  return { path: input.path, root, entries: result, truncated };
 }
 
 export async function getFileContent(input: FileContentInput, allowEdit: boolean) {

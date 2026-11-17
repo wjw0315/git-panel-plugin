@@ -352,6 +352,7 @@ export function FilesTab({
     repo,
     openPath: selected,
     dirty,
+    absoluteRoot: rootQuery.data?.root ?? null,
     onFlush: flushBeforeLeaving,
     onOpenPath: (path) => setSelected(path),
     onSave: () => void save(),

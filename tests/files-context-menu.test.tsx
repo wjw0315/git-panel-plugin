@@ -44,7 +44,10 @@ const calls: Array<{ name: string; input: Record<string, unknown> }> = [];
 let fileEditable = false;
 const dirCalls: string[] = [];
 
-function installRpc(overrides?: { fsOp?: (input: Record<string, unknown>) => unknown }) {
+function installRpc(overrides?: {
+  fsOp?: (input: Record<string, unknown>) => unknown;
+  dirRoot?: string | null;
+}) {
   calls.length = 0;
   dirCalls.length = 0;
   rpc.handler = (name) => {
@@ -53,7 +56,7 @@ function installRpc(overrides?: { fsOp?: (input: Record<string, unknown>) => unk
         dirCalls.push(input.path);
         const root = input.repo === "" ? "" : input.repo;
         const entries = input.path === "" ? (DIR_ENTRIES[root] ?? []) : [];
-        return { path: input.path, entries, truncated: false };
+        return { path: input.path, root: overrides?.dirRoot !== undefined ? overrides.dirRoot : "/repo", entries, truncated: false };
       }) as unknown as RpcHandler;
     }
     if (name === "git.file-content") {
@@ -149,6 +152,8 @@ describe("上下文菜单：触发与项集", () => {
     expect(await screen.findByText("src")).toBeTruthy();
     await settle();
     openMenuFor("src", "longpress");
+    expect(screen.getByText("contextCopyPathRelative")).toBeTruthy();
+    expect(screen.getByText("contextCopyPathAbsolute")).toBeTruthy();
     expect(screen.getByText("contextNewFile")).toBeTruthy();
     expect(screen.getByText("contextNewFolder")).toBeTruthy();
     expect(screen.getByText("contextUpload")).toBeTruthy();
@@ -182,16 +187,38 @@ describe("上下文菜单：触发与项集", () => {
     expect(screen.queryByText("contextNewFile")).toBeNull();
   });
 
-  it("复制路径走剪贴板并关菜单", async () => {
+  it("复制相对路径：写入仓库相对路径并关菜单", async () => {
     installRpc();
     mount(newClient());
     expect(await screen.findByText("src")).toBeTruthy();
     await settle();
     openMenuFor("src", "contextmenu");
-    fireEvent.click(screen.getByText("contextCopyPath").closest("button")!);
+    fireEvent.click(screen.getByText("contextCopyPathRelative").closest("button")!);
     await settle();
     expect((globalThis as { __copied?: string }).__copied).toBe("src");
-    expect(screen.queryByText("contextCopyPath")).toBeNull();
+    expect(screen.queryByText("contextCopyPathRelative")).toBeNull();
+  });
+
+  it("复制绝对路径：daemon 仓库根 + 相对路径", async () => {
+    installRpc();
+    mount(newClient());
+    expect(await screen.findByText("src")).toBeTruthy();
+    await settle();
+    openMenuFor("src", "contextmenu");
+    fireEvent.click(screen.getByText("contextCopyPathAbsolute").closest("button")!);
+    await settle();
+    expect((globalThis as { __copied?: string }).__copied).toBe("/repo/src");
+    expect(screen.queryByText("contextCopyPathAbsolute")).toBeNull();
+  });
+
+  it("仓库根缺失时绝对路径项禁用", async () => {
+    installRpc({ dirRoot: null });
+    mount(newClient());
+    expect(await screen.findByText("src")).toBeTruthy();
+    await settle();
+    openMenuFor("src", "contextmenu");
+    const absButton = screen.getByText("contextCopyPathAbsolute").closest("button");
+    expect(absButton?.hasAttribute("disabled")).toBe(true);
   });
 });
 

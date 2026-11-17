@@ -163,7 +163,8 @@ export interface Strings {
   saveFailed: string;
   fileChanged: string;
   contextRename: string;
-  contextCopyPath: string;
+  contextCopyPathRelative: string;
+  contextCopyPathAbsolute: string;
   contextReveal: string;
   contextOpenWith: string;
   contextNewFile: string;
@@ -387,7 +388,8 @@ const en: Strings = {
   saveFailed: "Save failed",
   fileChanged: "The file changed on disk; reload before saving",
   contextRename: "Rename",
-  contextCopyPath: "Copy path",
+  contextCopyPathRelative: "Copy relative path",
+  contextCopyPathAbsolute: "Copy absolute path",
   contextReveal: "Reveal in Finder",
   contextOpenWith: "Open with default app",
   contextNewFile: "New file",
@@ -609,7 +611,8 @@ const zh: Strings = {
   saveFailed: "保存失败",
   fileChanged: "文件在编辑期间被改动，请重新加载后再保存",
   contextRename: "重命名",
-  contextCopyPath: "复制路径",
+  contextCopyPathRelative: "复制相对路径",
+  contextCopyPathAbsolute: "复制绝对路径",
   contextReveal: "在 Finder 中显示",
   contextOpenWith: "用默认应用打开",
   contextNewFile: "新建文件",
