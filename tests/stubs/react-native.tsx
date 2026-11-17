@@ -35,6 +35,17 @@ export function fireLongPress(element: Element): void {
   longPressHandlers.get(element)?.();
 }
 
+/**
+ * jsdom 无布局引擎，这里可配置「窗口内的面板原点」供 measureInWindow 模拟返回；
+ * 上下文菜单定位（视口坐标 → 面板内坐标）依赖它做回归测试。
+ */
+export const mockWindowOrigin: { x: number; y: number; width: number; height: number } = {
+  x: 0,
+  y: 0,
+  width: 0,
+  height: 0,
+};
+
 export function fireLayout(element: Element, width: number, height = 0): void {
   layoutHandlers.get(element)?.({ nativeEvent: { layout: { x: 0, y: 0, width, height } } });
 }
@@ -86,6 +97,8 @@ function host(tag: string) {
       // jsdom 的 cssstyle 拒收无单位数值，必须带 px 才会落进 style 属性。
       if (typeof resolved.width === "number") css.width = `${resolved.width}px`;
       if (typeof resolved.minWidth === "number") css.minWidth = `${resolved.minWidth}px`;
+      if (typeof resolved.left === "number") css.left = `${resolved.left}px`;
+      if (typeof resolved.top === "number") css.top = `${resolved.top}px`;
     }
     const hasCss = Object.keys(css).length > 0;
     // RN stub 的 props 带索引签名，onLayout 的静态类型会被摊成 unknown；按函数收窄一次。
@@ -95,6 +108,14 @@ function host(tag: string) {
       if (node instanceof Element && layoutHandler) layoutHandlers.set(node, layoutHandler);
       if (node instanceof Element && typeof onLongPress === "function") {
         longPressHandlers.set(node, onLongPress as () => void);
+      }
+      // 模拟 RN 的 measureInWindow：回调 (x, y, width, height)，位置取 mockWindowOrigin。
+      if (node instanceof HTMLElement) {
+        (node as unknown as { measureInWindow?: unknown }).measureInWindow = (
+          callback: (x: number, y: number, width: number, height: number) => void,
+        ) => {
+          callback(mockWindowOrigin.x, mockWindowOrigin.y, mockWindowOrigin.width, mockWindowOrigin.height);
+        };
       }
       if (typeof ref === "function") ref(node);
       else if (ref) ref.current = node;

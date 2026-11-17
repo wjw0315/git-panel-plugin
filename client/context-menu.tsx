@@ -132,7 +132,10 @@ export function useContextMenu({
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const [uploading, setUploading] = useState(false);
   const layerRef = useRef<View>(null);
-  const paneOrigin = useRef({ x: 0, y: 0 });
+  /** 树面板的窗口位置与尺寸；测量是异步的，必须走 state 才能在测量完成后重渲染菜单。 */
+  const [paneFrame, setPaneFrame] = useState<{ x: number; y: number; width: number; height: number } | null>(
+    null,
+  );
   const uploadingRef = useRef(false);
 
   const canUpload = typeof document !== "undefined" && typeof btoa === "function";
@@ -168,12 +171,16 @@ export function useContextMenu({
 
   const openMenu = (row: MenuRow, trigger: string, x?: number, y?: number) => {
     setMenu({ row, trigger, x: x ?? null, y: y ?? null });
-    // 变体 B 需要树面板的窗口原点换算锚点；下一帧测量等布局稳定。
-    setTimeout(() => {
-      layerRef.current?.measureInWindow?.((px, py) => {
-        paneOrigin.current = { x: px, y: py };
-      });
-    }, 0);
+    setPaneFrame(null);
+    if (x != null && y != null) {
+      // 变体 B 需要树面板的窗口原点换算锚点；下一帧测量等布局稳定，
+      // 测量完成（setPaneFrame）前菜单以 opacity 0 占位，不闪错误位置。
+      setTimeout(() => {
+        layerRef.current?.measureInWindow?.((px, py, width, height) => {
+          setPaneFrame({ x: px, y: py, width, height });
+        });
+      }, 0);
+    }
   };
 
   const pick = async (action: MenuAction, row: MenuRow) => {
@@ -278,8 +285,12 @@ export function useContextMenu({
     }
   };
 
-  // Esc 关闭（输入框聚焦时不抢键；移动端无键盘自然无效）。
+  // Esc 关闭（输入框聚焦时不抢键）。仅 web/桌面有 DOM 事件系统；
+  // React Native（Hermes）没有 window，无条件挂监听会在文件页挂载时
+  // 抛 "undefined is not a function" 炸掉整个面板，必须特性检测。
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (typeof window.addEventListener !== "function") return;
     const handler = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (
@@ -325,14 +336,23 @@ export function useContextMenu({
     };
   };
 
+  const anchored = menu?.x != null && menu?.y != null;
+  const MENU_WIDTH = 220;
+  const MENU_EST_HEIGHT = 260; // 文件夹 7 项 + 头部的保守估高
   const menuLeft =
-    menu?.x != null && menu?.y != null
-      ? Math.max(4, Math.min(menu.x - paneOrigin.current.x - 8, 4000))
+    anchored && paneFrame
+      ? Math.round(
+          Math.max(4, Math.min(menu!.x! - paneFrame.x - 8, paneFrame.width - MENU_WIDTH - 4)),
+        )
       : undefined;
   const menuTop =
-    menu?.x != null && menu?.y != null
-      ? Math.max(4, menu.y - paneOrigin.current.y + 6)
+    anchored && paneFrame
+      ? Math.round(
+          Math.max(4, Math.min(menu!.y! - paneFrame.y + 6, paneFrame.height - MENU_EST_HEIGHT)),
+        )
       : undefined;
+  // 有坐标但测量未完成：先以 opacity 0 占位，绝不按错误坐标显示一帧。
+  const menuVisible = !anchored || paneFrame != null;
 
   const layer = (
     <View
@@ -348,10 +368,12 @@ export function useContextMenu({
             accessibilityLabel={strings.close}
           />
           <View
+            testID="context-menu"
             style={{
               position: "absolute",
               ...(menuLeft != null && menuTop != null ? { left: menuLeft, top: menuTop } : { left: 40, right: 40, bottom: 60 }),
               width: menuLeft != null ? 220 : undefined,
+              opacity: menuVisible ? 1 : 0,
               backgroundColor: theme.colors.surface0,
               borderWidth: 1,
               borderColor: theme.colors.border,

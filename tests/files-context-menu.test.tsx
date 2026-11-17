@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { FilesTab } from "../client/files";
 import type { Strings } from "../client/strings";
-import { fireLongPress } from "./stubs/react-native";
+import { fireLongPress, mockWindowOrigin } from "./stubs/react-native";
 import { rpc, testSettings, type RpcHandler } from "./stubs/plugin-client";
 import { toastLog } from "./stubs/plugin-ui";
 
@@ -279,5 +279,55 @@ describe("上下文菜单：对话框闭环", () => {
     fireEvent.click(within(screen.getByTestId("modal-content")).getByText("delete").closest("button")!);
     await settle();
     expect(toastLog.some((t) => t.kind === "error" && t.message === "already exists")).toBe(true);
+  });
+});
+
+describe("上下文菜单：锚定定位（回归：不跟手/跑位）", () => {
+  it("右键坐标经面板原点换算，且测量完成前菜单不可见", async () => {
+    mockWindowOrigin.x = 200; // 树面板在窗口 (200, 60)，宽 280 高 400
+    mockWindowOrigin.y = 60;
+    mockWindowOrigin.width = 280;
+    mockWindowOrigin.height = 400;
+    installRpc();
+    mount(newClient());
+    expect(await screen.findByText("src")).toBeTruthy();
+    await settle();
+    // 在面板内 (260, 150) 处右键 → 面板内坐标应为 (52, 96)
+    fireEvent.contextMenu(row("src"), { clientX: 260, clientY: 150 });
+    await settle(0); // 只跑一帧：测量回调已排程
+    const menu = screen.getByTestId("context-menu");
+    const style = (menu as HTMLElement).style;
+    if (style.opacity === "0") {
+      // 首帧隐藏等测量：第二帧后必须落在换算后的坐标
+      await settle();
+    }
+    expect(parseFloat(style.left)).toBeCloseTo(52, 0); // 260-200-8
+    expect(parseFloat(style.top)).toBeCloseTo(96, 0); // 150-60+6
+    mockWindowOrigin.x = 0;
+    mockWindowOrigin.y = 0;
+    mockWindowOrigin.width = 0;
+    mockWindowOrigin.height = 0;
+  });
+
+  it("坐标贴近面板右缘时回卷，不越出面板", async () => {
+    mockWindowOrigin.x = 200;
+    mockWindowOrigin.y = 60;
+    mockWindowOrigin.width = 280;
+    mockWindowOrigin.height = 400;
+    installRpc();
+    mount(newClient());
+    expect(await screen.findByText("src")).toBeTruthy();
+    await settle();
+    // 右键点在面板几乎最右侧（面板内 x=270 → 菜单宽 220 放不下）
+    fireEvent.contextMenu(row("src"), { clientX: 470, clientY: 150 });
+    await settle(0);
+    const menu = screen.getByTestId("context-menu");
+    const style = (menu as HTMLElement).style;
+    if (style.opacity === "0") await settle();
+    expect(parseFloat(style.left)).toBeLessThanOrEqual(280 - 224 + 4);
+    mockWindowOrigin.x = 0;
+    mockWindowOrigin.y = 0;
+    mockWindowOrigin.width = 0;
+    mockWindowOrigin.height = 0;
   });
 });
