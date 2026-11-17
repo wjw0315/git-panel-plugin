@@ -20,11 +20,24 @@ export function TextInput(props: { value?: string; onChangeText?: (value: string
 
 const noop = () => {};
 
+/** 测试断言用：记录 toast 与剪贴板写入。 */
+export const toastLog: Array<{ kind: string; message: string }> = [];
+
 export function useToast() {
-  return { show: noop, error: noop, dismiss: noop };
+  return {
+    show: (message?: string) => {
+      toastLog.push({ kind: "show", message: message ?? "" });
+    },
+    error: (message?: string) => {
+      toastLog.push({ kind: "error", message: message ?? "" });
+    },
+    dismiss: noop,
+  };
 }
 
-export async function copyText(_value: string): Promise<void> {}
+export async function copyText(value: string): Promise<void> {
+  (globalThis as { __copied?: string }).__copied = value;
+}
 
 function ModalRoot({
   open,

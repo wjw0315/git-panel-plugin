@@ -12,6 +12,10 @@ type StubProps = Record<string, unknown> & {
   numberOfLines?: number;
   onLayout?: (event: unknown) => void;
   onPress?: () => void;
+  /** 测试经 fireLongPress(node) 直接触发；无 DOM 原生对应事件。 */
+  onLongPress?: () => void;
+  /** 右键：透传 DOM onContextMenu（React 合成事件，fireEvent.contextMenu 可触发）。 */
+  onContextMenu?: (event: unknown) => void;
   onHoverIn?: () => void;
   onHoverOut?: () => void;
   style?: unknown;
@@ -23,6 +27,13 @@ type StubProps = Record<string, unknown> & {
  * node and tests trigger it with `fireLayout(node, width)`.
  */
 const layoutHandlers = new WeakMap<Element, (event: unknown) => void>();
+
+const longPressHandlers = new WeakMap<Element, () => void>();
+
+/** 测试触发行的长按（上下文菜单的移动端入口）。 */
+export function fireLongPress(element: Element): void {
+  longPressHandlers.get(element)?.();
+}
 
 export function fireLayout(element: Element, width: number, height = 0): void {
   layoutHandlers.get(element)?.({ nativeEvent: { layout: { x: 0, y: 0, width, height } } });
@@ -44,6 +55,8 @@ function host(tag: string) {
       children,
       onLayout,
       onPress,
+      onLongPress,
+      onContextMenu,
       onHoverIn,
       onHoverOut,
       accessibilityRole,
@@ -80,6 +93,9 @@ function host(tag: string) {
       typeof onLayout === "function" ? (onLayout as (event: unknown) => void) : null;
     const attach = (node: unknown) => {
       if (node instanceof Element && layoutHandler) layoutHandlers.set(node, layoutHandler);
+      if (node instanceof Element && typeof onLongPress === "function") {
+        longPressHandlers.set(node, onLongPress as () => void);
+      }
       if (typeof ref === "function") ref(node);
       else if (ref) ref.current = node;
     };
@@ -88,6 +104,7 @@ function host(tag: string) {
       {
         ref: attach,
         onClick: onPress as (() => void) | undefined,
+        onContextMenu: onContextMenu as ((event: unknown) => void) | undefined,
         onMouseEnter: onHoverIn as (() => void) | undefined,
         onMouseLeave: onHoverOut as (() => void) | undefined,
         role: accessibilityRole,
