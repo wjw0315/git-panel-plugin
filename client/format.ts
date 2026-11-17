@@ -11,18 +11,60 @@ export function dirName(path: string): string {
   return parts.join("/");
 }
 
+// 与 utf8Bytes 同理：插件客户端也跑在 React Native（Hermes）上，
+// Android Hermes 没有 Intl.RelativeTimeFormat，直接 new 会抛
+// "undefined cannot be used as a constructor" 并炸掉整个面板。
+// 必须特性检测，缺了就走手写措辞兑底。
+type RelativeFormatter = { format: (value: number, unit: string) => string };
+
+function relativeFormatter(locale: string): RelativeFormatter | null {
+  const formatter = (globalThis as { Intl?: { RelativeTimeFormat?: unknown } }).Intl?.RelativeTimeFormat;
+  if (typeof formatter !== "function") return null;
+  return new (formatter as new (
+    locale: string,
+    options?: { numeric?: string },
+  ) => RelativeFormatter)(locale, { numeric: "auto" });
+}
+
 export function relativeTime(iso: string, zh: boolean): string {
   const time = Date.parse(iso);
   if (!Number.isFinite(time)) return iso;
   const delta = Math.round((time - Date.now()) / 1000);
   const abs = Math.abs(delta);
-  const formatter = new Intl.RelativeTimeFormat(zh ? "zh-CN" : "en", { numeric: "auto" });
-  if (abs < 60) return formatter.format(Math.round(delta), "second");
-  if (abs < 3600) return formatter.format(Math.round(delta / 60), "minute");
-  if (abs < 86_400) return formatter.format(Math.round(delta / 3600), "hour");
-  if (abs < 2_592_000) return formatter.format(Math.round(delta / 86_400), "day");
-  if (abs < 31_536_000) return formatter.format(Math.round(delta / 2_592_000), "month");
-  return formatter.format(Math.round(delta / 31_536_000), "year");
+  let value = Math.round(delta);
+  let unit = "second";
+  if (abs >= 31_536_000) {
+    value = Math.round(delta / 31_536_000);
+    unit = "year";
+  } else if (abs >= 2_592_000) {
+    value = Math.round(delta / 2_592_000);
+    unit = "month";
+  } else if (abs >= 86_400) {
+    value = Math.round(delta / 86_400);
+    unit = "day";
+  } else if (abs >= 3600) {
+    value = Math.round(delta / 3600);
+    unit = "hour";
+  } else if (abs >= 60) {
+    value = Math.round(delta / 60);
+    unit = "minute";
+  }
+
+  const formatter = relativeFormatter(zh ? "zh-CN" : "en");
+  if (formatter) {
+    if (abs < 60) return formatter.format(Math.round(delta), "second");
+    return formatter.format(value, unit);
+  }
+
+  // Hermes 兑底：固定措辞，保持与 Intl 相同的粒度分桶。
+  if (zh) {
+    if (value === 0) return delta >= 0 ? "马上" : "刚刚";
+    const noun = unit === "month" ? "个月" : (unit === "second" ? "秒" : unit === "minute" ? "分钟" : unit === "hour" ? "小时" : unit === "day" ? "天" : "年");
+    return delta >= 0 ? `${value} ${noun}后` : `${value} ${noun}前`;
+  }
+  if (value === 0) return delta >= 0 ? "soon" : "just now";
+  const plural = value === 1 ? unit : `${unit}s`;
+  return delta >= 0 ? `in ${value} ${plural}` : `${value} ${plural} ago`;
 }
 
 export function formatDate(iso: string): string {
