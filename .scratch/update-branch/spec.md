@@ -93,7 +93,7 @@ Status: ready-for-agent
 
 ## 范围外
 
-- 面板内解决冲突与继续操作（标记 resolved、`merge --continue` / `rebase --continue`）——冲突需在终端或外部工具解决，面板只负责发起、查看与中止。
+- 面板内解决冲突与继续操作（标记 resolved、`merge --continue` / `rebase --continue`）——冲突需在终端或外部工具解决，面板只负责发起、查看与中止。（**已由 `.scratch/conflict-resolution/` 承接，见该目录 spec**）
 - squash 合并、fast-forward / ff-only 合并选项（上游快进仍由现有 pull 承担）。
 - interactive rebase、`--autostash`、变基到任意提交。
 - 合并/变基后的自动 push。

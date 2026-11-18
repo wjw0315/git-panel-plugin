@@ -7,7 +7,7 @@ import { useAgent, useSettings, useTabState, useWorkspace } from "@getpaseo/plug
 import { Icon, Modal, useToast } from "@getpaseo/plugin/client/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { z } from "zod";
 import { DEFAULT_SETTINGS, gitPanelSettings, type GitRepoEntry } from "../shared/git";
 import { useGitAction, useReposQuery, useSnapshotQuery } from "./api";
@@ -460,7 +460,9 @@ function GitPanelBody({
         icon={<Icon name="FolderGit2" size={18} color={theme.colors.foreground} />}
       >
         <Modal.Content>
-          <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ gap: 4 }}>
+          {/* 列表直接交给弹层正文滚动：内嵌固定 maxHeight 的 ScrollView 在手机上
+              会被sheet手势吃掉滚动，超出部分既看不到也滚不动（11 个仓库只显示 9 个）。 */}
+          <View style={{ gap: 4 }}>
             {repoOptions.map((entry) => {
               const active = entry.path === repo;
               return (
@@ -512,7 +514,7 @@ function GitPanelBody({
                 </Pressable>
               );
             })}
-          </ScrollView>
+          </View>
         </Modal.Content>
       </Modal>
     </View>

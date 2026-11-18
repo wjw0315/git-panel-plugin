@@ -97,6 +97,8 @@ function host(tag: string) {
       // jsdom 的 cssstyle 拒收无单位数值，必须带 px 才会落进 style 属性。
       if (typeof resolved.width === "number") css.width = `${resolved.width}px`;
       if (typeof resolved.minWidth === "number") css.minWidth = `${resolved.minWidth}px`;
+      // 固定高度上限也要落进 DOM：切换仓库弹层曾用 maxHeight:420 把仓库裁掉。
+      if (typeof resolved.maxHeight === "number") css.maxHeight = `${resolved.maxHeight}px`;
       if (typeof resolved.left === "number") css.left = `${resolved.left}px`;
       if (typeof resolved.top === "number") css.top = `${resolved.top}px`;
     }
