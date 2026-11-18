@@ -119,7 +119,6 @@ export async function listRepos(inputCwd: string): Promise<RepoListResult> {
 async function collectRepos(cwd: string): Promise<RepoListResult> {
   const repos: GitRepoEntry[] = [];
   const seen = new Set<string>();
-  const started = Date.now();
 
   let workspaceRoot: string | null = null;
   try {
@@ -138,6 +137,12 @@ async function collectRepos(cwd: string): Promise<RepoListResult> {
     });
   }
 
+  // The budget must cover only the nested-repository walk. The two git
+  // subprocesses above (rev-parse + symbolic-ref) can each stall for seconds
+  // while a commit storm keeps every panel query refetching; counting them
+  // against the budget made the walk skip the workspace's first level
+  // entirely, collapsing the repo switcher to a single entry.
+  const started = Date.now();
   const queue: Array<{ directory: string; depth: number }> = [{ directory: cwd, depth: 0 }];
   while (queue.length > 0 && repos.length < MAX_REPOS && Date.now() - started < SCAN_BUDGET_MS) {
     const current = queue.shift();
