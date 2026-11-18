@@ -1,6 +1,6 @@
 import type { PluginTheme } from "@getpaseo/plugin";
 import { Icon, Modal, TextInput } from "@getpaseo/plugin/client/ui";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { TextButton } from "./kit";
 import type { Strings } from "./strings";
@@ -67,11 +67,21 @@ export function UpdateBranchDialog({
     setPickerOpen(false);
     setQuery("");
   };
+  // 外层对话框被宿主直接关闭（Esc/点遮罩）时同步收起选择器并清空搜索，
+  // 避免下次打开带着旧过滤词。
+  useEffect(() => {
+    if (!open) {
+      setPickerOpen(false);
+      setQuery("");
+    }
+  }, [open]);
   const sameBranch = selected !== null && selected === current;
   const canRun =
     selected !== null && !sameBranch && !pending && workspaceClean !== false;
-  const needle = query.trim().toLowerCase();
-  const matches = (name: string) => name.toLowerCase().includes(needle);
+  // NFKC 归一化：中文 IME 可能输入全角数字/符号（１．０．１），
+  // 折叠后才能命中半角分支名；toLowerCase 对 CJK 恒等，对英文分支不敏感大小写。
+  const needle = query.trim().normalize("NFKC").toLowerCase();
+  const matches = (name: string) => name.normalize("NFKC").toLowerCase().includes(needle);
   const localMatches = (data?.local ?? []).filter((branch) => matches(branch.name));
   const remoteMatches = (data?.remote ?? []).filter((branch) => matches(branch.name));
 

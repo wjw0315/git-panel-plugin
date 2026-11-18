@@ -29,7 +29,11 @@ const THEME = {
 const STRINGS = new Proxy({}, { get: (_target, key) => String(key) }) as Strings;
 
 const DATA = {
-  local: [{ name: "main" }, { name: "feat/deep-name" }],
+  local: [
+    { name: "main" },
+    { name: "feat/deep-name" },
+    { name: "feature/1.0.1-资料信息-merge" },
+  ],
   remote: [{ name: "origin/feat/remote-only" }],
 };
 
@@ -442,7 +446,7 @@ describe("分支选择器搜索", () => {
   });
 
   it("关闭选择器后重新打开时搜索已清空", () => {
-    const { rerender } = render(
+    render(
       <UpdateBranchDialog
         theme={THEME}
         strings={STRINGS}
@@ -475,6 +479,101 @@ describe("分支选择器搜索", () => {
     fireEvent.click(screen.getByText("updatePickBranch"));
     expect(screen.getByRole("button", { name: "main" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "origin/feat/remote-only" })).toBeTruthy();
+  });
+
+  it("中文分支名可直接命中，全角输入经 NFKC 折叠命中半角分支名", () => {
+    render(
+      <UpdateBranchDialog
+        theme={THEME}
+        strings={STRINGS}
+        open
+        current="main"
+        operation="merge"
+        data={DATA}
+        selected={null}
+        preview={null}
+        workspaceClean={true}
+        branchState={null}
+        conflictedFiles={[]}
+        pending={false}
+        onAbort={() => {}}
+        onSelectOperation={() => {}}
+        onSelect={() => {}}
+        onRun={() => {}}
+        onOpenChange={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("updatePickBranch"));
+
+    // 中文子串直接命中
+    fireEvent.change(screen.getByPlaceholderText("searchBranches"), {
+      target: { value: "资料信息" },
+    });
+    expect(screen.getByRole("button", { name: "feature/1.0.1-资料信息-merge" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "main" })).toBeNull();
+
+    // 中文 IME 全角数字/标点折叠后命中半角分支名
+    fireEvent.change(screen.getByPlaceholderText("searchBranches"), {
+      target: { value: "１．０．１" },
+    });
+    expect(screen.getByRole("button", { name: "feature/1.0.1-资料信息-merge" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "main" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "feat/deep-name" })).toBeNull();
+  });
+
+  it("外层对话框在选择器打开时被关闭，重开后选择器收起且搜索已清空", () => {
+    const { rerender } = render(
+      <UpdateBranchDialog
+        theme={THEME}
+        strings={STRINGS}
+        open
+        current="main"
+        operation="merge"
+        data={DATA}
+        selected={null}
+        preview={null}
+        workspaceClean={true}
+        branchState={null}
+        conflictedFiles={[]}
+        pending={false}
+        onAbort={() => {}}
+        onSelectOperation={() => {}}
+        onSelect={() => {}}
+        onRun={() => {}}
+        onOpenChange={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("updatePickBranch"));
+    fireEvent.change(screen.getByPlaceholderText("searchBranches"), {
+      target: { value: "feat" },
+    });
+    expect(screen.queryByRole("button", { name: "main" })).toBeNull();
+
+    // 宿主直接关闭外层对话框（Esc/点遮罩），不经过 closePicker
+    rerender(
+      <UpdateBranchDialog
+        theme={THEME}
+        strings={STRINGS}
+        open={false}
+        current="main"
+        operation="merge"
+        data={DATA}
+        selected={null}
+        preview={null}
+        workspaceClean={true}
+        branchState={null}
+        conflictedFiles={[]}
+        pending={false}
+        onAbort={() => {}}
+        onSelectOperation={() => {}}
+        onSelect={() => {}}
+        onRun={() => {}}
+        onOpenChange={() => {}}
+      />,
+    );
+    // 重新打开：选择器应收起（主对话框在、分支列表不在）
     rerender(
       <UpdateBranchDialog
         theme={THEME}
@@ -496,6 +595,12 @@ describe("分支选择器搜索", () => {
         onOpenChange={() => {}}
       />,
     );
+    expect(screen.getAllByText("updateMergeCard").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "feat/deep-name" })).toBeNull();
+
+    // 再次打开选择器：搜索已清空，列表完整
+    fireEvent.click(screen.getByText("updatePickBranch"));
+    expect(screen.getByRole("button", { name: "main" })).toBeTruthy();
   });
 });
 
