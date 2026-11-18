@@ -474,7 +474,6 @@ export function FilesTab({
           onPress={paged.showMore}
         />
       </ScrollView>
-      {contextMenu.layer}
     </View>
   );
 
@@ -523,6 +522,8 @@ export function FilesTab({
         <View testID="files-preview-pane" style={{ flex: 1, minWidth: 0, minHeight: 0 }}>
           {preview}
         </View>
+        {/* 菜单层挂页签根：backdrop 覆盖树+预览整页，点外围任意位置关闭 */}
+        {contextMenu.layer}
       </View>
     );
   }
@@ -542,6 +543,8 @@ export function FilesTab({
           {preview}
         </View>
       ) : null}
+      {/* 菜单层挂页签根：backdrop 覆盖树+预览整页，点外围任意位置关闭 */}
+      {contextMenu.layer}
     </View>
   );
 }

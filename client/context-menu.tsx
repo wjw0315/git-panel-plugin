@@ -324,6 +324,25 @@ export function useContextMenu({
     }
   };
 
+  // 点击外围兜底（桌面）：文档内任何不落在菜单上的按下都关闭——覆盖插件面板之外的
+  // 点击（backdrop 只能盖住本页签）。移动端无 window，靠覆盖整页的 backdrop。
+  useEffect(() => {
+    if (!menu && !dialog) return;
+    const handler = (event: Event) => {
+      const target = event.target as Element | null;
+      if (
+        target &&
+        typeof target.closest === "function" &&
+        target.closest('[data-testid="context-menu"]')
+      ) {
+        return;
+      }
+      closeAll();
+    };
+    window.addEventListener("pointerdown", handler, true);
+    return () => window.removeEventListener("pointerdown", handler, true);
+  }, [menu, dialog]);
+
   // Esc 关闭（输入框聚焦时不抢键）。仅 web/桌面有 DOM 事件系统；
   // React Native（Hermes）没有 window，无条件挂监听会在文件页挂载时
   // 抛 "undefined is not a function" 炸掉整个面板，必须特性检测。

@@ -397,3 +397,43 @@ describe("上下文菜单：移动端长按定位（回归：跑到屏幕下面�
     expect(style.bottom).toBe(""); // 不得再用 bottom 锚定（手机上会落到可视区外）
   });
 });
+
+describe("上下文菜单：点击外围关闭", () => {
+  it("文档内点击菜单外任意位置（window pointerdown）关闭菜单", async () => {
+    installRpc();
+    mount(newClient());
+    expect(await screen.findByText("src")).toBeTruthy();
+    await settle();
+    openMenuFor("src", "contextmenu");
+    expect(screen.getByText("contextNewFile")).toBeTruthy();
+    // 点击发生在插件面板之外（target 不是菜单）
+    await act(async () => {
+      fireEvent.pointerDown(window, { target: document.body });
+    });
+    expect(screen.queryByText("contextNewFile")).toBeNull();
+  });
+
+  it("点击菜单内部不关闭", async () => {
+    installRpc();
+    mount(newClient());
+    expect(await screen.findByText("src")).toBeTruthy();
+    await settle();
+    openMenuFor("src", "contextmenu");
+    const menu = screen.getByTestId("context-menu");
+    await act(async () => {
+      fireEvent.pointerDown(menu, { target: menu });
+    });
+    expect(screen.getByText("contextNewFile")).toBeTruthy();
+  });
+
+  it("点击透明遮罩层（backdrop）关闭菜单", async () => {
+    installRpc();
+    mount(newClient());
+    expect(await screen.findByText("src")).toBeTruthy();
+    await settle();
+    openMenuFor("src", "contextmenu");
+    const backdrop = screen.getByLabelText("close", { selector: "button" });
+    fireEvent.click(backdrop);
+    expect(screen.queryByText("contextNewFile")).toBeNull();
+  });
+});
