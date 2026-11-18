@@ -1,5 +1,5 @@
 import type { PluginTheme } from "@getpaseo/plugin";
-import { Icon, Modal } from "@getpaseo/plugin/client/ui";
+import { Icon, Modal, TextInput } from "@getpaseo/plugin/client/ui";
 import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { TextButton } from "./kit";
@@ -61,10 +61,19 @@ export function UpdateBranchDialog({
   onAbort: () => void;
   onOpenChange: (open: boolean) => void;
 }) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const closePicker = () => {
+    setPickerOpen(false);
+    setQuery("");
+  };
   const sameBranch = selected !== null && selected === current;
   const canRun =
     selected !== null && !sameBranch && !pending && workspaceClean !== false;
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const needle = query.trim().toLowerCase();
+  const matches = (name: string) => name.toLowerCase().includes(needle);
+  const localMatches = (data?.local ?? []).filter((branch) => matches(branch.name));
+  const remoteMatches = (data?.remote ?? []).filter((branch) => matches(branch.name));
 
   if (branchState !== null) {
     const merging = branchState === "merging";
@@ -284,40 +293,72 @@ export function UpdateBranchDialog({
       <Modal
         open={open && pickerOpen}
         onOpenChange={(next) => {
-          if (!next) setPickerOpen(false);
+          if (!next) closePicker();
         }}
         title={strings.updatePickBranch}
         icon={<Icon name="GitBranch" size={18} color={theme.colors.foreground} />}
       >
         <Modal.Content scrollable={false} style={{ maxHeight: 380 }}>
-          <ScrollView style={{ maxHeight: 340 }}>
-            <GroupLabel theme={theme} label={strings.local} />
-            {(data?.local ?? []).map((branch) => (
-              <BranchRow
-                key={branch.name}
-                theme={theme}
-                name={branch.name}
-                current={branch.name === current}
-                onPress={() => {
-                  onSelect(branch.name);
-                  setPickerOpen(false);
-                }}
-              />
-            ))}
-            <GroupLabel theme={theme} label={strings.remote} />
-            {(data?.remote ?? []).map((branch) => (
-              <BranchRow
-                key={branch.name}
-                theme={theme}
-                name={branch.name}
-                current={false}
-                onPress={() => {
-                  onSelect(branch.name);
-                  setPickerOpen(false);
-                }}
-              />
-            ))}
-          </ScrollView>
+          <View style={{ gap: 8 }}>
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              autoFocus
+              placeholder={strings.searchBranches}
+              placeholderTextColor={theme.colors.foregroundMuted}
+              accessibilityLabel={strings.searchBranches}
+              style={{
+                borderWidth: 1,
+                borderColor: theme.colors.border,
+                borderRadius: 7,
+                paddingHorizontal: 9,
+                paddingVertical: 6,
+                color: theme.colors.foreground,
+                backgroundColor: theme.colors.surface1,
+                fontSize: 12,
+              }}
+            />
+            <ScrollView style={{ maxHeight: 300 }}>
+              {localMatches.length > 0 ? <GroupLabel theme={theme} label={strings.local} /> : null}
+              {localMatches.map((branch) => (
+                <BranchRow
+                  key={branch.name}
+                  theme={theme}
+                  name={branch.name}
+                  current={branch.name === current}
+                  onPress={() => {
+                    onSelect(branch.name);
+                    closePicker();
+                  }}
+                />
+              ))}
+              {remoteMatches.length > 0 ? <GroupLabel theme={theme} label={strings.remote} /> : null}
+              {remoteMatches.map((branch) => (
+                <BranchRow
+                  key={branch.name}
+                  theme={theme}
+                  name={branch.name}
+                  current={false}
+                  onPress={() => {
+                    onSelect(branch.name);
+                    closePicker();
+                  }}
+                />
+              ))}
+              {localMatches.length === 0 && remoteMatches.length === 0 ? (
+                <Text
+                  style={{
+                    color: theme.colors.foregroundMuted,
+                    fontSize: 12,
+                    paddingHorizontal: 8,
+                    paddingVertical: 10,
+                  }}
+                >
+                  {strings.noBranchMatches}
+                </Text>
+              ) : null}
+            </ScrollView>
+          </View>
         </Modal.Content>
       </Modal>
     </>

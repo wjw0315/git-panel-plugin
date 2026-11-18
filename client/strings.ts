@@ -119,6 +119,8 @@ export interface Strings {
   updateRebaseCard: string;
   updateRebaseCardDesc: string;
   updatePickBranch: string;
+  searchBranches: string;
+  noBranchMatches: string;
   updateBrings: string;
   updateOntoArrow: string;
   updateMoves: string;
@@ -342,6 +344,8 @@ const en: Strings = {
   updateRebaseCard: "Rebase",
   updateRebaseCardDesc: "Move your commits onto another branch, creating linear history.",
   updatePickBranch: "Select a branch…",
+  searchBranches: "Search branches…",
+  noBranchMatches: "No matching branches",
   updateBrings: "Brings commits",
   updateOntoArrow: "rebase onto",
   updateMoves: "Moves commits",
@@ -567,6 +571,8 @@ const zh: Strings = {
   updateRebaseCard: "变基",
   updateRebaseCardDesc: "将你的提交移到另一分支之上，形成线性历史。",
   updatePickBranch: "选择分支…",
+  searchBranches: "搜索分支…",
+  noBranchMatches: "没有匹配的分支",
   updateBrings: "将带入提交",
   updateOntoArrow: "变基到",
   updateMoves: "将被移动提交",

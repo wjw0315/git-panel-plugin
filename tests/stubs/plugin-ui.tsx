@@ -9,11 +9,18 @@ export function Markdown({ children }: { children?: ReactNode }) {
   return <div data-testid="markdown">{children}</div>;
 }
 
-export function TextInput(props: { value?: string; onChangeText?: (value: string) => void }) {
+export function TextInput(props: {
+  value?: string;
+  onChangeText?: (value: string) => void;
+  placeholder?: string;
+}) {
   return (
     <textarea
       value={props.value ?? ""}
-      onChange={(event) => props.onChangeText?.((event.target as unknown as { value: string }).value)}
+      placeholder={props.placeholder}
+      onChange={(event) =>
+        props.onChangeText?.((event.target as unknown as { value: string }).value)
+      }
     />
   );
 }

@@ -309,6 +309,196 @@ describe("UpdateBranchDialog", () => {
   });
 });
 
+describe("分支选择器搜索", () => {
+  it("输入关键字同时过滤本地与远程列表", () => {
+    render(
+      <UpdateBranchDialog
+        theme={THEME}
+        strings={STRINGS}
+        open
+        current="main"
+        operation="merge"
+        data={DATA}
+        selected={null}
+        preview={null}
+        workspaceClean={true}
+        branchState={null}
+        conflictedFiles={[]}
+        pending={false}
+        onAbort={() => {}}
+        onSelectOperation={() => {}}
+        onSelect={() => {}}
+        onRun={() => {}}
+        onOpenChange={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("updatePickBranch"));
+    expect(screen.getByRole("button", { name: "main" })).toBeTruthy();
+
+    fireEvent.change(screen.getByPlaceholderText("searchBranches"), {
+      target: { value: "feat" },
+    });
+    expect(screen.queryByRole("button", { name: "main" })).toBeNull();
+    expect(screen.getByRole("button", { name: "feat/deep-name" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "origin/feat/remote-only" })).toBeTruthy();
+    expect(screen.getByText("local")).toBeTruthy();
+    expect(screen.getByText("remote")).toBeTruthy();
+  });
+
+  it("搜索大小写不敏感", () => {
+    render(
+      <UpdateBranchDialog
+        theme={THEME}
+        strings={STRINGS}
+        open
+        current="main"
+        operation="merge"
+        data={DATA}
+        selected={null}
+        preview={null}
+        workspaceClean={true}
+        branchState={null}
+        conflictedFiles={[]}
+        pending={false}
+        onAbort={() => {}}
+        onSelectOperation={() => {}}
+        onSelect={() => {}}
+        onRun={() => {}}
+        onOpenChange={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("updatePickBranch"));
+    fireEvent.change(screen.getByPlaceholderText("searchBranches"), {
+      target: { value: "DEEP" },
+    });
+    expect(screen.getByRole("button", { name: "feat/deep-name" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "main" })).toBeNull();
+  });
+
+  it("无匹配时显示空态并隐藏分组标签", () => {
+    render(
+      <UpdateBranchDialog
+        theme={THEME}
+        strings={STRINGS}
+        open
+        current="main"
+        operation="merge"
+        data={DATA}
+        selected={null}
+        preview={null}
+        workspaceClean={true}
+        branchState={null}
+        conflictedFiles={[]}
+        pending={false}
+        onAbort={() => {}}
+        onSelectOperation={() => {}}
+        onSelect={() => {}}
+        onRun={() => {}}
+        onOpenChange={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("updatePickBranch"));
+    fireEvent.change(screen.getByPlaceholderText("searchBranches"), {
+      target: { value: "does-not-exist" },
+    });
+    expect(screen.getByText("noBranchMatches")).toBeTruthy();
+    expect(screen.queryByText("local")).toBeNull();
+    expect(screen.queryByText("remote")).toBeNull();
+  });
+
+  it("选中过滤后的分支回传完整名字", () => {
+    const onSelect = vi.fn();
+    render(
+      <UpdateBranchDialog
+        theme={THEME}
+        strings={STRINGS}
+        open
+        current="main"
+        operation="merge"
+        data={DATA}
+        selected={null}
+        preview={null}
+        workspaceClean={true}
+        branchState={null}
+        conflictedFiles={[]}
+        pending={false}
+        onAbort={() => {}}
+        onSelectOperation={() => {}}
+        onSelect={onSelect}
+        onRun={() => {}}
+        onOpenChange={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("updatePickBranch"));
+    fireEvent.change(screen.getByPlaceholderText("searchBranches"), {
+      target: { value: "remote-only" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "origin/feat/remote-only" }));
+    expect(onSelect).toHaveBeenCalledWith("origin/feat/remote-only");
+  });
+
+  it("关闭选择器后重新打开时搜索已清空", () => {
+    const { rerender } = render(
+      <UpdateBranchDialog
+        theme={THEME}
+        strings={STRINGS}
+        open
+        current="main"
+        operation="merge"
+        data={DATA}
+        selected={null}
+        preview={null}
+        workspaceClean={true}
+        branchState={null}
+        conflictedFiles={[]}
+        pending={false}
+        onAbort={() => {}}
+        onSelectOperation={() => {}}
+        onSelect={() => {}}
+        onRun={() => {}}
+        onOpenChange={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("updatePickBranch"));
+    fireEvent.change(screen.getByPlaceholderText("searchBranches"), {
+      target: { value: "feat" },
+    });
+    expect(screen.queryByRole("button", { name: "main" })).toBeNull();
+
+    // 选中分支 → closePicker 清空搜索；重新打开后列表应恢复完整
+    fireEvent.click(screen.getByRole("button", { name: "feat/deep-name" }));
+    fireEvent.click(screen.getByText("updatePickBranch"));
+    expect(screen.getByRole("button", { name: "main" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "origin/feat/remote-only" })).toBeTruthy();
+    rerender(
+      <UpdateBranchDialog
+        theme={THEME}
+        strings={STRINGS}
+        open
+        current="main"
+        operation="merge"
+        data={DATA}
+        selected={null}
+        preview={null}
+        workspaceClean={true}
+        branchState={null}
+        conflictedFiles={[]}
+        pending={false}
+        onAbort={() => {}}
+        onSelectOperation={() => {}}
+        onSelect={() => {}}
+        onRun={() => {}}
+        onOpenChange={() => {}}
+      />,
+    );
+  });
+});
+
 describe("预检块冲突与脏工作区态（工单 04）", () => {
   it("merge 预检发现冲突时显示警示与文件列表", () => {
     render(
