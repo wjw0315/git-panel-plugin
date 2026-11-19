@@ -458,6 +458,7 @@ export const gitPanelSettings = defineSettings({
   version: 1,
   schema: z.object({
     showComposerPill: z.boolean().default(true),
+    showHeaderButton: z.boolean().default(true),
     defaultDiffView: z.enum(["unified", "split"]).default("unified"),
     changesView: z.enum(["flat", "tree"]).default("flat"),
     refreshIntervalMs: z.number().int().min(0).max(60000).default(5000),
@@ -473,6 +474,7 @@ export type GitPanelSettings = z.output<typeof gitPanelSettings.schema>;
 
 export const DEFAULT_SETTINGS: GitPanelSettings = {
   showComposerPill: true,
+  showHeaderButton: true,
   defaultDiffView: "unified",
   changesView: "flat",
   refreshIntervalMs: 5000,

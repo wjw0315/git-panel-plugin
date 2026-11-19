@@ -1,4 +1,6 @@
-import type { PluginClientContext } from "@getpaseo/plugin/client";
+import type { PluginClientContext, PluginNewWorkspaceItemProps } from "@getpaseo/plugin/client";
+import { contributeHeaderButtons } from "./client/header-button";
+import { GitNewWorkspaceItem } from "./client/new-workspace-item";
 import { GitAgentPanel, GitPanel } from "./client/panel";
 import { contributePills } from "./client/pill";
 import { GitPanelSettings } from "./client/settings";
@@ -19,6 +21,16 @@ export default function contribute(client: PluginClientContext) {
     icon: "GitBranch",
     locations: ["workspace", "explorer"],
     Component: GitAgentPanel,
+  });
+
+  // The item needs the client to open a panel; bind it once so the component
+  // identity stays stable across renders.
+  const NewWorkspaceItem = (props: PluginNewWorkspaceItemProps) => (
+    <GitNewWorkspaceItem {...props} client={client} />
+  );
+  client.addNewWorkspaceItem({
+    id: "git-panel-new-workspace",
+    Component: NewWorkspaceItem,
   });
 
   client.addSettingsScreen({
@@ -58,5 +70,12 @@ export default function contribute(client: PluginClientContext) {
     },
   });
 
-  return contributePills(client);
+  const disposePills = contributePills(client);
+  // The workspace header keeps the panel reachable before an agent exists; the
+  // composer pill only appears from the first session onwards.
+  const disposeHeaderButtons = contributeHeaderButtons(client);
+  return () => {
+    disposeHeaderButtons();
+    disposePills();
+  };
 }

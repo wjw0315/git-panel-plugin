@@ -2,8 +2,8 @@
   "id": "git-panel",
   "media": [],
   "requirements": {
-    "paseo": ">=0.15.0"
+    "paseo": ">=0.16.0"
   },
   "name": "Git Panel",
-  "description": "IDE-style Git panel for Paseo: repositories, branches, commit graph, changes with commit and amend, diffs, file browser, and a composer branch marker."
+  "description": "IDE-style Git panel for Paseo: repositories, branches, commit graph, changes with commit and amend, diffs, file browser, a composer branch marker, a workspace header button, and a branch summary on the New workspace screen."
 }

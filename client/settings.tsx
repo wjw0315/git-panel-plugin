@@ -35,6 +35,13 @@ export function GitPanelSettings({ theme }: PluginSurfaceProps) {
             disabled={settings.status !== "ready"}
           />
           <SettingsSwitch
+            label={strings.showHeaderButton}
+            hint={strings.showHeaderButtonHint}
+            value={values.showHeaderButton}
+            onValueChange={(value) => save({ showHeaderButton: value })}
+            disabled={settings.status !== "ready"}
+          />
+          <SettingsSwitch
             label={strings.allowEdit}
             hint={strings.allowEditHint}
             value={values.allowFileEdit}

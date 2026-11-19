@@ -193,6 +193,8 @@ export interface Strings {
   settings: string;
   showPill: string;
   showPillHint: string;
+  showHeaderButton: string;
+  showHeaderButtonHint: string;
   defaultDiff: string;
   defaultDiffHint: string;
   changesView: string;
@@ -420,6 +422,9 @@ const en: Strings = {
   settings: "Git panel",
   showPill: "Composer branch marker",
   showPillHint: "Show <repo> (<branch>) on each agent's composer.",
+  showHeaderButton: "Workspace header button",
+  showHeaderButtonHint:
+    "Show a Git button in the workspace header. It is visible before the first message, when the composer marker is not drawn yet.",
   defaultDiff: "Default diff view",
   defaultDiffHint: "Layout new diffs start with.",
   changesView: "Changes list",
@@ -645,6 +650,9 @@ const zh: Strings = {
   settings: "Git 面板",
   showPill: "输入框分支标记",
   showPillHint: "在每个智能体输入框上方显示 <仓库> (<分支>)。",
+  showHeaderButton: "工作区头部按钮",
+  showHeaderButtonHint:
+    "在工作区标题栏显示 Git 按钮。首次发起会话前也会显示，此时输入框分支标记还不会出现。",
   defaultDiff: "默认差异视图",
   defaultDiffHint: "新打开的差异使用的布局。",
   changesView: "变更列表",

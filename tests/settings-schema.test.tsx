@@ -5,6 +5,7 @@ describe("editor settings", () => {
   it("defaults autosave and syntax highlighting on", () => {
     expect(DEFAULT_SETTINGS.autoSaveFile).toBe(true);
     expect(DEFAULT_SETTINGS.editorSyntaxHighlight).toBe(true);
+    expect(DEFAULT_SETTINGS.showHeaderButton).toBe(true);
   });
 
   it("fills the new switches for settings stored by older versions", () => {
@@ -18,5 +19,6 @@ describe("editor settings", () => {
     });
     expect(parsed.autoSaveFile).toBe(true);
     expect(parsed.editorSyntaxHighlight).toBe(true);
+    expect(parsed.showHeaderButton).toBe(true);
   });
 });
