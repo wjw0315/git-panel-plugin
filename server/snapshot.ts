@@ -256,6 +256,7 @@ export async function buildSnapshot(
     logResult,
     remoteNamesResult,
     upstreamResult,
+    countResult,
     mergeHeadResult,
     rebaseHeadResult,
   ] = await Promise.all([
@@ -271,6 +272,12 @@ export async function buildSnapshot(
     git(root, ["remote"], { accept: [128], timeout: 8_000 }),
     git(root, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"], {
       accept: [1, 128],
+      timeout: 8_000,
+    }),
+    // Cheap enough to run on every poll and required *before* the reuse check:
+    // push/fetch move the upstream ref without touching HEAD or the worktree.
+    git(root, ["rev-list", "--left-right", "--count", "HEAD...@{upstream}"], {
+      accept: [128],
       timeout: 8_000,
     }),
     git(root, ["rev-parse", "-q", "--verify", "MERGE_HEAD"], {
@@ -308,17 +315,30 @@ export async function buildSnapshot(
         ? ("rebasing" as const)
         : null;
 
+  const hasUpstream = upstreamResult.code === 0 && upstreamResult.stdout.trim() !== "";
+  let ahead = 0;
+  let behind = 0;
+  if (hasUpstream) {
+    const [aheadRaw, behindRaw] = countResult.stdout.trim().split(/\s+/);
+    ahead = Number(aheadRaw) || 0;
+    behind = Number(behindRaw) || 0;
+  }
+
   const previous = options.previous ?? null;
+  // ahead/behind belong to the snapshot, so they take part in the reuse check:
+  // a push moves neither HEAD nor the worktree, and reusing the old snapshot
+  // would pin the header to the pre-push count forever.
   if (
     previous &&
     fingerprintOf(previous) ===
       fingerprintOf({ changes: limitedChanges, head, branch }) &&
-    previous.branchState === branchState
+    previous.branchState === branchState &&
+    previous.hasUpstream === hasUpstream &&
+    previous.ahead === ahead &&
+    previous.behind === behind
   ) {
     return { ...previous, root, checkedAt };
   }
-
-  const hasUpstream = upstreamResult.code === 0 && upstreamResult.stdout.trim() !== "";
 
   const remoteNames = remoteNamesResult.stdout
     .split("\n")
@@ -331,13 +351,7 @@ export async function buildSnapshot(
         : (remoteNames[0] ?? "origin")
       : null;
 
-  const [countResult, urlResult, numstatResult] = await Promise.all([
-    hasUpstream
-      ? git(root, ["rev-list", "--left-right", "--count", "HEAD...@{upstream}"], {
-          accept: [128],
-          timeout: 8_000,
-        })
-      : Promise.resolve({ stdout: "", stderr: "", code: 0 }),
+  const [urlResult, numstatResult] = await Promise.all([
     remoteName
       ? git(root, ["remote", "get-url", remoteName], { accept: [128], timeout: 8_000 })
       : Promise.resolve({ stdout: "", stderr: "", code: 0 }),
@@ -346,14 +360,6 @@ export async function buildSnapshot(
       timeout: 10_000,
     }).catch(() => ({ stdout: "", stderr: "", code: 128 })),
   ]);
-
-  let ahead = 0;
-  let behind = 0;
-  if (hasUpstream) {
-    const [aheadRaw, behindRaw] = countResult.stdout.trim().split(/\s+/);
-    ahead = Number(aheadRaw) || 0;
-    behind = Number(behindRaw) || 0;
-  }
 
   let remote: GitRemote | null = null;
   if (remoteName && urlResult.code === 0 && urlResult.stdout.trim() !== "") {
