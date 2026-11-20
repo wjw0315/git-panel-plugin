@@ -1,0 +1,889 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PROTOTYPE · Orca Git 面板 UI 三选一</title>
+<!--
+  原型，不是产品代码。
+  问题：Orca 右侧边栏的 Git 面板，现在的交互（tabs + 小图标按钮 + 底部提交区）不好用，页面也不好看，
+       想要 4 个结构完全不同的方向来挑。
+  做法：单个 HTML 文件，`?variant=A|B|C|D` 切换，底部浮条翻页；右侧是 320/420px 的边栏宽度，
+       外面套一层假 Orca 外壳，避免"在真空里都好看"。
+  约束：每个变体只用 Orca components 面板已有的组件词汇（Button / IconButton / List / Tabs /
+       Textarea / Switch / Select / Card / Badge / Callout / EmptyState），所以选中的方案能直接落回 src/panel.tsx。
+  数据：内存假数据，改动只在页面里生效，不碰 git。
+  运行：直接双击，或 `python3 -m http.server` 后开 /orca/git-panel/prototype/ui.html
+-->
+<style>
+  :root {
+    --bg: #17171b;
+    --panel: #1e1e24;
+    --panel-2: #23232b;
+    --fg: #e8e8ee;
+    --muted: #9a9aa8;
+    --border: #2f2f3a;
+    --accent: #6d8bff;
+    --accent-fg: #0d1226;
+    --green: #4ec98a;
+    --red: #ef6b6b;
+    --amber: #e5b567;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font: 13px/1.45 var(--sans);
+    color: var(--fg);
+    background: #101013;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    overflow: hidden;
+  }
+
+  /* 假 Orca 外壳：左边是主区，右边是考察对象 */
+  .host {
+    padding: 10px 14px;
+    color: #4c4c58;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+  }
+  .host-tabs { display: flex; gap: 4px; font-size: 12px; }
+  .host-tab { padding: 5px 10px; border-radius: 6px; background: #17171c; color: #8a8a97; }
+  .host-tab.active { background: #23232b; color: #d7d7e2; }
+  .host-body {
+    flex: 1;
+    border: 1px dashed #24242c;
+    border-radius: 10px;
+    padding: 18px;
+    color: #3a3a45;
+    font-size: 12px;
+  }
+  .host-note { color: #4a4a55; font-size: 11px; max-width: 46ch; }
+
+  .sidebar {
+    width: var(--sidebar-width, 340px);
+    border-left: 1px solid #24242c;
+    background: var(--panel);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .sidebar-head {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #a9a9b8;
+    font-size: 11px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+  .sidebar-scroll { overflow: auto; flex: 1; padding: 10px; min-height: 0; }
+
+  /* 通用零件（对应 orca 组件） */
+  .row { display: flex; align-items: center; gap: 8px; }
+  .between { justify-content: space-between; }
+  .col { display: flex; flex-direction: column; gap: 8px; }
+  h1, h2, h3 { margin: 0; font-weight: 600; }
+  h1 { font-size: 15px; }
+  h2 { font-size: 13px; }
+  h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .muted { color: var(--muted); }
+  .mono { font-family: var(--mono); }
+  .xs { font-size: 11px; }
+  .sm { font-size: 12px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    border-radius: 999px; padding: 1px 8px; font-size: 11px;
+    border: 1px solid var(--border); color: var(--muted);
+  }
+  .pill.warn { color: var(--amber); border-color: #4a3a1e; background: #241d10; }
+  .pill.live { color: var(--green); border-color: #1e3d2c; background: #10211a; }
+  .btn {
+    appearance: none; border: 1px solid var(--border); background: var(--panel-2);
+    color: var(--fg); border-radius: 7px; padding: 6px 11px; font: inherit; font-size: 12px;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  }
+  .btn:hover { border-color: #43435a; background: #2a2a34; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #0b1024; font-weight: 600; }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  .btn.ghost:hover { color: var(--fg); background: #26262f; }
+  .btn.danger { color: var(--red); }
+  .btn[disabled] { opacity: .45; cursor: not-allowed; }
+  .btn.block { width: 100%; justify-content: center; }
+  .btn.tiny { padding: 3px 7px; font-size: 11px; border-radius: 5px; }
+  .iconbtn {
+    width: 22px; height: 22px; display: inline-grid; place-items: center;
+    border-radius: 6px; border: 1px solid transparent; background: transparent;
+    color: var(--muted); cursor: pointer; font-size: 13px; line-height: 1;
+  }
+  .iconbtn:hover { background: #2b2b35; color: var(--fg); border-color: var(--border); }
+  .iconbtn.danger:hover { color: var(--red); }
+
+  .group { border: 1px solid var(--border); border-radius: 9px; overflow: hidden; }
+  .group + .group { margin-top: 8px; }
+  .group-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 9px; background: #21212a; border-bottom: 1px solid var(--border);
+  }
+  .file { display: flex; align-items: center; gap: 8px; padding: 6px 9px; }
+  .file + .file { border-top: 1px solid #26262f; }
+  .file:hover { background: #24242d; }
+  .file .path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 11.5px; }
+  .stat { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .add { color: var(--green); }
+  .del { color: var(--red); }
+  .resolve { display: none; }
+  .file:hover .resolve { display: inline-flex; }
+
+  textarea, input[type=text] {
+    width: 100%; resize: none; font: inherit; font-size: 12px;
+    background: #191920; color: var(--fg); border: 1px solid var(--border);
+    border-radius: 7px; padding: 7px 9px;
+  }
+  textarea:focus, input:focus { outline: 2px solid #33406e; border-color: #3b4a80; }
+
+  .footer {
+    border-top: 1px solid var(--border);
+    padding: 9px 10px; background: var(--panel); display: flex; flex-direction: column; gap: 7px;
+    flex: none;
+  }
+  .footer .row { flex-wrap: wrap; }
+  .empty { padding: 18px 12px; text-align: center; color: var(--muted); font-size: 12px; }
+  .callout {
+    border: 1px solid #4a3a1e; background: #241d10; color: var(--amber);
+    border-radius: 8px; padding: 7px 9px; font-size: 11.5px;
+  }
+  .card { border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2); }
+  .card-head { padding: 8px 10px; display: flex; justify-content: space-between; align-items: center; }
+
+  /* A：行动流 */
+  .sticky-top { position: sticky; top: -10px; margin: -10px -10px 8px; padding: 10px; background: var(--panel); border-bottom: 1px solid var(--border); z-index: 2; }
+
+  /* B：复核条 */
+  .selectbar {
+    position: sticky; bottom: 0; margin: 0 -10px -10px; padding: 8px 10px;
+    background: #1b1b22; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 7px;
+  }
+  .checkline { width: 13px; height: 13px; border: 1px solid #45455a; border-radius: 4px; display: inline-block; flex: none; }
+  .checkline.on { background: var(--accent); border-color: var(--accent); }
+
+  /* C：控制台 */
+  .console { font-family: var(--mono); font-size: 11.5px; }
+  .cline { display: flex; gap: 7px; padding: 3px 6px; border-radius: 5px; align-items: center; }
+  .cline.sel { background: #2a2f45; }
+  .cline:hover { background: #24242d; }
+  .cline .flag { width: 12px; color: var(--amber); flex: none; }
+  .cline .path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cline .hint { flex: none; color: #5c5c6b; font-size: 10.5px; opacity: .45; }
+  .cline:hover .hint, .cline.sel .hint { opacity: 1; }
+  .cmdbar { display: flex; align-items: center; gap: 6px; font-family: var(--mono); }
+  .cmdbar .prompt { color: var(--accent); }
+  .keymap { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2px 10px; font-family: var(--mono); font-size: 10.5px; color: #6b6b7c; }
+  .keymap b { color: #a9a9b8; font-weight: 500; }
+
+  /* D：卡片栈 + sheet */
+  .stack { display: flex; flex-direction: column; gap: 9px; }
+  .taprow { display: flex; align-items: center; gap: 8px; padding: 8px 10px; cursor: pointer; }
+  .taprow + .taprow { border-top: 1px solid #26262f; }
+  .taprow .chev { color: #5c5c6b; }
+  .actions4 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; }
+  .sheet {
+    position: absolute; left: 0; right: 0; bottom: 0; background: #1c1c24;
+    border-top: 1px solid var(--border); border-radius: 12px 12px 0 0;
+    padding: 12px 10px; box-shadow: 0 -12px 30px rgba(0,0,0,.45); z-index: 5;
+  }
+  .sheet-title { font-family: var(--mono); font-size: 11.5px; margin-bottom: 9px; word-break: break-all; }
+  .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.35); z-index: 4; }
+  .sidebar-wrap { position: relative; min-height: 0; display: flex; flex-direction: column; flex: 1; }
+  #overlay { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
+  #overlay > * { pointer-events: auto; }
+
+  /* 浮条（刻意不像设计的一部分） */
+  .proto-bar {
+    position: fixed; left: 16px; bottom: 14px;
+    display: flex; align-items: center; gap: 6px; z-index: 50;
+    background: #f4f4f7; color: #101014; border-radius: 999px;
+    padding: 6px 8px; box-shadow: 0 10px 28px rgba(0,0,0,.5); font-size: 12px;
+    white-space: nowrap; max-width: calc(100vw - 380px);
+  }
+  .proto-bar button {
+    border: 0; background: #101014; color: #f4f4f7; width: 24px; height: 24px;
+    border-radius: 999px; cursor: pointer; font-size: 13px; line-height: 1;
+  }
+  .proto-bar .label { padding: 0 6px; font-weight: 600; }
+  .proto-bar .tag { font-weight: 400; color: #52525e; }
+  .proto-bar .sep { width: 1px; height: 18px; background: #d4d4dc; }
+  .proto-bar .chip {
+    border: 1px solid #d4d4dc; background: #fff; color: #101014; border-radius: 999px;
+    padding: 2px 9px; cursor: pointer; font-size: 11px;
+  }
+  .proto-bar .chip.on { background: #101014; color: #f4f4f7; border-color: #101014; }
+  .state-drawer {
+    position: fixed; right: 12px; top: 12px; width: 300px; max-height: 70vh; overflow: auto;
+    background: #0b0b10; color: #b9b9c8; border: 1px solid #2f2f3a; border-radius: 10px;
+    padding: 10px; font: 11px/1.5 var(--mono); z-index: 60; display: none;
+  }
+  .state-drawer.open { display: block; }
+  .state-drawer h4 { margin: 0 0 6px; font-size: 11px; color: #f4f4f7; }
+  .log { color: #7d7d90; }
+</style>
+</head>
+<body>
+  <div class="host">
+    <div class="host-tabs">
+      <span class="host-tab active">agent · codex</span>
+      <span class="host-tab">工作区</span>
+      <span class="host-tab">Source Control</span>
+    </div>
+    <div class="host-body">
+      <div class="host-note">
+        这是假的主区，只用来说明右侧边栏有多窄。原型里所有变体都活在这 340px 的列里，
+        任何在整页上好看、在边栏里挤成一团的设计都会被这里暴露出来。
+      </div>
+    </div>
+  </div>
+
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-head">
+      <span>右侧边栏 · 考察对象</span>
+      <span class="mono" id="width-tag">340px</span>
+    </div>
+    <div class="sidebar-wrap">
+      <div class="sidebar-scroll" id="stage"></div>
+      <div id="overlay"></div>
+    </div>
+  </aside>
+
+  <div class="proto-bar" id="bar"></div>
+  <div class="state-drawer" id="state-drawer"></div>
+
+<script>
+// ---------------------------------------------------------------------------
+// 假数据与内存状态：改动只在这里生效，不碰磁盘、不调 git。
+// ---------------------------------------------------------------------------
+const makeState = () => ({
+  repos: [
+    { root: '/work/git-panel-plugin', name: 'git-panel-plugin', branch: 'feat/git-panel' },
+    { root: '/work/git-panel-plugin/packages/inner', name: 'inner', branch: 'main' },
+  ],
+  repo: 0,
+  branch: 'feat/git-panel',
+  ahead: 1,
+  behind: 0,
+  staged: [{ path: 'src/panel.tsx', status: 'M', add: 12, del: 3 }],
+  modified: [
+    { path: 'src/worker.ts', status: 'M', add: 40, del: 8 },
+    { path: 'README.md', status: 'M', add: 4, del: 0 },
+  ],
+  untracked: [{ path: '.scratch/orca-git-panel/spec.md', status: '?', add: 120, del: 0 }],
+  stashes: [
+    { ref: 'stash@{0}', message: 'WIP on feat/git-panel: try the two-column layout', branch: 'feat/git-panel', ago: '2 小时前' },
+  ],
+  lastCommit: { subject: 'feat: first pass', sha: 'a6a8201' },
+  message: '',
+  amend: false,
+  op: null,
+  selection: [],
+  sheet: null,
+  cursor: 0,
+  log: ['原型启动：内存数据，改动不落盘'],
+});
+
+let state = makeState();
+
+const mutate = (label, fn) => {
+  fn(state);
+  state.log.unshift(`${label}`);
+  state.log = state.log.slice(0, 8);
+  render();
+};
+
+const fileCount = (s) => s.staged.length + s.modified.length + s.untracked.length;
+const dirty = (s) => fileCount(s) > 0;
+const totals = (s) => {
+  const all = [...s.staged, ...s.modified, ...s.untracked];
+  return { add: all.reduce((n, f) => n + f.add, 0), del: all.reduce((n, f) => n + f.del, 0) };
+};
+const esc = (text) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const stat = (f) => `<span class="stat"><span class="add">+${f.add}</span> <span class="del">−${f.del}</span></span>`;
+const branchPill = (s) => `<span class="pill ${dirty(s) ? 'warn' : 'live'}">${dirty(s) ? '●' : '○'} ${esc(s.branch)}</span>`;
+/** 控制台的统一行序：已暂存在前，工作区在后，光标与键盘动作都按这一条序列走。 */
+const consoleRows = (s) => [
+  ...s.staged.map((f) => ({ ...f, group: 'A', staged: true })),
+  ...s.modified.map((f) => ({ ...f, group: 'M', staged: false })),
+  ...s.untracked.map((f) => ({ ...f, group: '?', staged: false })),
+];
+
+// ---------------------------------------------------------------------------
+// 动作（每个变体共用，保证比较的是布局不是功能）
+// ---------------------------------------------------------------------------
+const actions = {
+  stage: (path) => mutate(`stage ${path}`, (s) => {
+    const from = s.modified.find((f) => f.path === path) || s.untracked.find((f) => f.path === path);
+    if (!from) return;
+    s.modified = s.modified.filter((f) => f.path !== path);
+    s.untracked = s.untracked.filter((f) => f.path !== path);
+    s.staged.push({ ...from, status: 'M' });
+  }),
+  unstage: (path) => mutate(`unstage ${path}`, (s) => {
+    const from = s.staged.find((f) => f.path === path);
+    if (!from) return;
+    s.staged = s.staged.filter((f) => f.path !== path);
+    s.modified.push({ ...from, status: 'M' });
+  }),
+  discard: (path) => mutate(`discard ${path}`, (s) => {
+    s.staged = s.staged.filter((f) => f.path !== path);
+    s.modified = s.modified.filter((f) => f.path !== path);
+    s.untracked = s.untracked.filter((f) => f.path !== path);
+  }),
+  stageAll: () => mutate('stage all', (s) => {
+    s.staged = [...s.staged, ...s.modified.map((f) => ({ ...f, status: 'M' })), ...s.untracked.map((f) => ({ ...f, status: 'A' }))];
+    s.modified = [];
+    s.untracked = [];
+  }),
+  unstageAll: () => mutate('unstage all', (s) => {
+    s.modified = [...s.modified, ...s.staged.map((f) => ({ ...f, status: 'M' }))];
+    s.staged = [];
+  }),
+  stageSelection: () => mutate(`stage ${state.selection.length} selected`, (s) => {
+    const picked = new Set(s.selection);
+    const moving = [...s.modified, ...s.untracked].filter((f) => picked.has(f.path));
+    s.staged.push(...moving.map((f) => ({ ...f, status: 'M' })));
+    s.modified = s.modified.filter((f) => !picked.has(f.path));
+    s.untracked = s.untracked.filter((f) => !picked.has(f.path));
+    s.selection = [];
+  }),
+  toggleSelected: (path) => {
+    state.selection = state.selection.includes(path)
+      ? state.selection.filter((p) => p !== path)
+      : [...state.selection, path];
+    render();
+  },
+  setMessage: (value) => { state.message = value; render(); },
+  toggleAmend: () => mutate(state.amend ? 'amend off' : 'amend on（带入上一条信息）', (s) => {
+    s.amend = !s.amend;
+    s.message = s.amend ? (s.lastCommit ? s.lastCommit.subject : '') : '';
+  }),
+  commit: () => mutate(state.amend ? 'commit --amend' : 'commit', (s) => {
+    if (!s.message.trim() || (!s.amend && !s.staged.length)) return;
+    s.lastCommit = { subject: s.message.split('\n')[0], sha: Math.random().toString(16).slice(2, 9) };
+    s.staged = [];
+    s.message = '';
+    s.amend = false;
+  }),
+  stashSave: () => mutate('stash save（含未跟踪）', (s) => {
+    if (!fileCount(s)) return;
+    s.stashes.unshift({ ref: `stash@{0}`, message: `WIP on ${s.branch}: ${s.message || '快照'}`, branch: s.branch, ago: '刚刚' });
+    s.stashes = s.stashes.map((st, i) => ({ ...st, ref: `stash@{${i}}` }));
+    s.modified = [];
+    s.untracked = [];
+    s.staged = [];
+    s.message = '';
+  }),
+  stashApply: (ref) => mutate(`stash apply ${ref}`, (s) => {
+    s.modified.push({ path: 'src/worker.ts', status: 'M', add: 40, del: 8 });
+  }),
+  stashPop: (ref) => mutate(`stash pop ${ref}`, (s) => {
+    s.stashes = s.stashes.filter((st) => st.ref !== ref).map((st, i) => ({ ...st, ref: `stash@{${i}}` }));
+    s.modified.push({ path: 'src/worker.ts', status: 'M', add: 40, del: 8 });
+  }),
+  stashDrop: (ref) => mutate(`stash drop ${ref}`, (s) => {
+    s.stashes = s.stashes.filter((st) => st.ref !== ref).map((st, i) => ({ ...st, ref: `stash@{${i}}` }));
+  }),
+  openSheet: (path) => { state.sheet = path; render(); },
+  closeSheet: () => { state.sheet = null; render(); },
+  pickRepo: (index) => {
+    state.repo = Number(index);
+    state.branch = state.repos[state.repo].branch;
+    state.log.unshift(`切仓库 ${state.repos[state.repo].name}`);
+    render();
+  },
+  move: (delta) => {
+    const flat = consoleRows(state);
+    if (!flat.length) return;
+    state.cursor = Math.max(0, Math.min(flat.length - 1, state.cursor + delta));
+    render();
+  },
+};
+
+// ---------------------------------------------------------------------------
+// 变体 A：行动流 —— 一行一个主按钮，提交条常驻底部
+// ---------------------------------------------------------------------------
+function VariantA(s) {
+  const row = (f, kind) => `
+    <div class="file">
+      <span class="path" title="${esc(f.path)}">${esc(f.path)}</span>
+      ${stat(f)}
+      ${kind === 'staged'
+        ? `<button class="btn tiny ghost" data-act="unstage" data-path="${esc(f.path)}">取消</button>`
+        : `<button class="btn tiny" data-act="stage" data-path="${esc(f.path)}">暂存</button>
+           <button class="btn tiny ghost danger" title="丢弃改动" data-act="discard" data-path="${esc(f.path)}">×</button>`}
+    </div>`;
+
+  return `
+  <div class="sticky-top">
+    <div class="row between">
+      <div class="row"><h1>Git</h1>${branchPill(s)}</div>
+      <button class="btn tiny ghost" data-act="refresh">↻</button>
+    </div>
+    <div class="row xs muted" style="margin-top:4px">
+      <span class="mono">${esc(s.repos[s.repo].name)}</span>
+      <span>·</span><span>↑${s.ahead} ↓${s.behind}</span>
+      <span>·</span><span>${fileCount(s)} 个改动</span>
+    </div>
+  </div>
+
+  ${s.staged.length ? `
+    <div class="col" style="gap:4px; margin-bottom:10px">
+      <h3>已暂存 ${s.staged.length}</h3>
+      <div class="row" style="flex-wrap:wrap; gap:4px">
+        ${s.staged.map((f) => `<button class="pill" title="点击取消暂存" data-act="unstage" data-path="${esc(f.path)}" style="cursor:pointer; background:transparent">${esc(f.path.split('/').pop())} ×</button>`).join('')}
+      </div>
+    </div>` : ''}
+
+  <div class="col" style="gap:6px">
+    <div class="row between">
+      <h3>待处理 ${s.modified.length + s.untracked.length}</h3>
+      <button class="btn tiny ghost" data-act="stageAll">全部暂存</button>
+    </div>
+    <div class="group">
+      ${s.modified.length || s.untracked.length
+        ? [...s.modified, ...s.untracked].map((f) => row(f, 'pending')).join('')
+        : `<div class="empty">工作区干净</div>`}
+    </div>
+  </div>
+
+  <div style="margin-top:10px">
+    <div class="row between" style="margin-bottom:5px">
+      <h3>贮藏 ${s.stashes.length}</h3>
+      <button class="btn tiny ghost" data-act="stashSave">收起当前改动</button>
+    </div>
+    ${s.stashes.length
+      ? `<div class="group">${s.stashes.map((st) => `
+          <div class="file">
+            <span class="path">${esc(st.message)}</span>
+            <span class="xs muted">${esc(st.ago)}</span>
+            <button class="btn tiny ghost" data-act="stashApply" data-ref="${st.ref}">应用</button>
+            <button class="btn tiny ghost danger" title="删除这条贮藏" data-act="stashDrop" data-ref="${st.ref}">×</button>
+          </div>`).join('')}</div>`
+      : `<div class="empty xs">没有贮藏</div>`}
+  </div>
+
+  <div style="height:10px"></div>
+  `;
+}
+
+VariantA.footer = (s) => `
+  <div class="row between">
+    <label class="row xs muted" style="gap:5px">
+      <input type="checkbox" data-act="toggleAmend" ${s.amend ? 'checked' : ''}/> 修正上次提交
+    </label>
+    <span class="stat">${s.staged.length} 个已暂存 · <span class="add">+${totals(s).add}</span> <span class="del">−${totals(s).del}</span></span>
+  </div>
+  <textarea rows="2" placeholder="提交信息：首行标题，空行后正文" data-input="message">${esc(s.message)}</textarea>
+  <button class="btn primary block" data-act="commit" ${(!s.amend && !s.staged.length) || !s.message.trim() ? 'disabled' : ''}>
+    ${s.amend ? '修正提交' : '提交'}${s.staged.length ? ` ${s.staged.length} 个文件` : ''}
+  </button>`;
+
+// ---------------------------------------------------------------------------
+// 变体 B：复核条 —— 多选 → 批量动作 → 底部复核后提交
+// ---------------------------------------------------------------------------
+function VariantB(s) {
+  const t = totals(s);
+  const line = (f) => `
+    <div class="file" data-act="toggleSelected" data-path="${esc(f.path)}" style="cursor:pointer">
+      <span class="checkline ${s.selection.includes(f.path) ? 'on' : ''}"></span>
+      <span class="path">${esc(f.path)}</span>
+      ${stat(f)}
+    </div>`;
+
+  return `
+  <div class="col" style="gap:8px; padding-bottom:8px">
+    <div class="row between">
+      <h1>Git</h1>
+      <span class="pill ${dirty(s) ? 'warn' : 'live'}">${dirty(s) ? '有改动' : '干净'}</span>
+    </div>
+
+    ${s.repos.length > 1 ? `
+      <div class="row" style="gap:4px; flex-wrap:wrap">
+        ${s.repos.map((r, i) => `<button class="btn tiny ${i === s.repo ? '' : 'ghost'}" data-act="pickRepo" data-index="${i}">${esc(r.name)}${i === s.repo ? ' ✓' : ''}</button>`).join('')}
+      </div>` : ''}
+
+    <div class="row" style="gap:6px">
+      <span class="pill">↑${s.ahead}</span>
+      <span class="pill">↓${s.behind}</span>
+      <span class="pill warn">+${t.add}</span>
+      <span class="pill">−${t.del}</span>
+      <span class="pill">${fileCount(s)} 文件</span>
+    </div>
+
+    ${s.staged.length ? `
+    <div class="group">
+      <div class="group-head">
+        <h3 style="color:var(--fg)">已暂存 · ${s.staged.length}</h3>
+        <button class="btn tiny ghost" data-act="unstageAll">全部取消</button>
+      </div>
+      ${s.staged.map((f) => `<div class="file"><span class="path">${esc(f.path)}</span>${stat(f)}<button class="btn tiny ghost" data-act="unstage" data-path="${esc(f.path)}">取消</button></div>`).join('')}
+    </div>` : ''}
+
+    <div class="group">
+      <div class="group-head">
+        <h3 style="color:var(--fg)">未暂存 · ${s.modified.length}</h3>
+        <button class="btn tiny ghost" data-act="stageAll">全部暂存</button>
+      </div>
+      ${s.modified.length ? s.modified.map(line).join('') : `<div class="empty xs">没有未暂存改动</div>`}
+    </div>
+
+    <div class="group">
+      <div class="group-head">
+        <h3 style="color:var(--fg)">未跟踪 · ${s.untracked.length}</h3>
+        <span class="xs muted">选中后批量暂存</span>
+      </div>
+      ${s.untracked.length ? s.untracked.map(line).join('') : `<div class="empty xs">没有新文件</div>`}
+    </div>
+
+    <div class="group">
+      <div class="group-head">
+        <h3 style="color:var(--fg)">贮藏 · ${s.stashes.length}</h3>
+        <button class="btn tiny ghost" data-act="stashSave">新建</button>
+      </div>
+      ${s.stashes.length
+        ? s.stashes.map((st) => `
+          <div class="file">
+            <span class="path" title="${esc(st.message)}">${esc(st.message)}</span>
+            <button class="btn tiny ghost" data-act="stashApply" data-ref="${st.ref}">应用</button>
+            <button class="btn tiny ghost danger" data-act="stashDrop" data-ref="${st.ref}">删</button>
+          </div>`).join('')
+        : `<div class="empty xs">没有贮藏</div>`}
+    </div>
+  </div>`;
+}
+
+VariantB.footer = (s) => `
+  <div class="row between xs muted">
+    <span>${s.selection.length ? `已选 ${s.selection.length} 项` : '勾选左侧方块可批量暂存'}</span>
+    <button class="btn tiny" data-act="stageSelection" ${s.selection.length ? '' : 'disabled'}>暂存所选</button>
+  </div>
+  <div class="row between">
+    <span class="stat">复核：${s.staged.length} 文件 · <span class="add">+${totals(s).add}</span> <span class="del">−${totals(s).del}</span></span>
+    <label class="row xs muted" style="gap:4px"><input type="checkbox" data-act="toggleAmend" ${s.amend ? 'checked' : ''}/> amend</label>
+  </div>
+  <textarea rows="2" placeholder="${s.amend ? '修正后的提交信息（已带入上一条）' : '提交信息'}" data-input="message">${esc(s.message)}</textarea>
+  <button class="btn primary block" data-act="commit" ${(!s.amend && !s.staged.length) || !s.message.trim() ? 'disabled' : ''}>${s.amend ? '修正上次提交' : '提交'}</button>`;
+
+// ---------------------------------------------------------------------------
+// 变体 C：控制台 —— 等宽高密度、键盘优先、无 tab
+// ---------------------------------------------------------------------------
+function VariantC(s) {
+  const rows = consoleRows(s);
+  const stagedRows = rows.filter((r) => r.staged);
+  const pendingRows = rows.filter((r) => !r.staged);
+  const indexOf = (row) => rows.indexOf(row);
+  const cline = (f) => `
+    <div class="cline ${indexOf(f) === s.cursor ? 'sel' : ''}" data-act="cursor" data-index="${indexOf(f)}">
+      <span class="flag">${f.group}</span>
+      <span class="path mono">${esc(f.path)}</span>
+      <span class="stat">${f.add > 0 ? `<span class="add">+${f.add}</span>` : ''} ${f.del > 0 ? `<span class="del">−${f.del}</span>` : ''}</span>
+      <span class="hint">${f.staged
+        ? `<button class="btn tiny ghost" data-act="unstage" data-path="${esc(f.path)}">u</button>`
+        : `<button class="btn tiny ghost" data-act="stage" data-path="${esc(f.path)}">s</button><button class="btn tiny ghost danger" data-act="discard" data-path="${esc(f.path)}">d</button>`}</span>
+    </div>`;
+
+  return `
+  <div class="console col" style="gap:8px">
+    <div class="row between">
+      <h1 style="font-family:var(--sans)">Git</h1>
+      <span class="xs" style="color:var(--amber)">${esc(s.branch)}${dirty(s) ? ' ●' : ' ○'}</span>
+    </div>
+    <div class="xs" style="color:#5c5c6b">${esc(s.repos[s.repo].name)} · ↑${s.ahead} ↓${s.behind} · ${fileCount(s)} 改动</div>
+
+    ${stagedRows.length ? `
+      <div>
+        <div class="xs" style="color:#5c5c6b"># 已暂存 ${stagedRows.length}</div>
+        ${stagedRows.map(cline).join('')}
+      </div>` : ''}
+
+    <div>
+      <div class="xs" style="color:#5c5c6b"># 工作区 ${pendingRows.length}</div>
+      ${pendingRows.length ? pendingRows.map(cline).join('') : `<div class="xs" style="color:#5c5c6b">（干净）</div>`}
+    </div>
+
+    <div>
+      <div class="row between">
+        <span class="xs" style="color:#5c5c6b"># 贮藏 ${s.stashes.length}</span>
+        <button class="btn tiny ghost" data-act="stashSave">stash push -u</button>
+      </div>
+      ${s.stashes.map((st) => `<div class="cline"><span class="flag" style="color:#6d8bff">~</span><span class="path mono">${esc(st.message)}</span><span class="hint"><button class="btn tiny ghost" data-act="stashApply" data-ref="${st.ref}">a</button><button class="btn tiny ghost" data-act="stashPop" data-ref="${st.ref}">p</button><button class="btn tiny ghost danger" data-act="stashDrop" data-ref="${st.ref}">x</button></span></div>`).join('')}
+    </div>
+
+    <div class="keymap">
+      <span><b>j/k</b> 移动</span><span><b>s</b> 暂存</span>
+      <span><b>u</b> 取消暂存</span><span><b>d</b> 丢弃</span>
+      <span><b>⏎</b> 提交</span><span><b>⇧A</b> amend</span>
+    </div>
+  </div>`;
+}
+
+VariantC.footer = (s) => `
+  <div class="cmdbar">
+    <span class="prompt">›</span>
+    <input type="text" data-input="message" placeholder="${s.amend ? 'amend：沿用上一条信息，可直接改' : '提交信息，回车提交'}" value="${esc(s.message)}" />
+    <button class="btn tiny primary" data-act="commit" ${(!s.amend && !s.staged.length) || !s.message.trim() ? 'disabled' : ''}>⏎</button>
+  </div>
+  <div class="row between xs muted">
+    <span>${s.staged.length} 已暂存 · +${totals(s).add} −${totals(s).del}</span>
+    <label class="row" style="gap:4px"><input type="checkbox" data-act="toggleAmend" ${s.amend ? 'checked' : ''}/> amend</label>
+  </div>`;
+
+// ---------------------------------------------------------------------------
+// 变体 D：卡片栈 —— 每类一张卡，点行开底部动作面板，底部四个大按钮
+// ---------------------------------------------------------------------------
+function VariantD(s) {
+  const tap = (f) => `
+    <div class="taprow" data-act="openSheet" data-path="${esc(f.path)}">
+      <span class="path mono" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${esc(f.path)}</span>
+      ${stat(f)}
+      <span class="chev">›</span>
+    </div>`;
+
+  const card = (title, count, body, hint) => `
+    <div class="card">
+      <div class="card-head">
+        <h2>${title}</h2>
+        <span class="pill">${count}</span>
+      </div>
+      ${body || `<div class="empty xs">${hint}</div>`}
+    </div>`;
+
+  return `
+  <div class="stack">
+    <div>
+      <div class="row between">
+        <h1>Git</h1>
+        ${branchPill(s)}
+      </div>
+      <div class="xs muted" style="margin-top:4px">${esc(s.repos[s.repo].name)} · ↑${s.ahead} ↓${s.behind}</div>
+    </div>
+
+    ${card('已暂存', s.staged.length, s.staged.map(tap).join(''), '暂存区为空')}
+    ${card('已修改', s.modified.length, s.modified.map(tap).join(''), '没有已修改文件')}
+    ${card('未跟踪', s.untracked.length, s.untracked.map(tap).join(''), '没有新文件')}
+    ${card('贮藏', s.stashes.length, s.stashes.map((st) => `
+      <div class="taprow">
+        <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" class="sm">${esc(st.message)}</span>
+        <button class="btn tiny" data-act="stashPop" data-ref="${st.ref}">弹出</button>
+      </div>`).join(''), '没有贮藏')}
+
+  </div>`;
+}
+
+VariantD.sheet = (s) => (s.sheet ? `
+  <div class="scrim" data-act="closeSheet"></div>
+  <div class="sheet">
+    <div class="sheet-title">${esc(s.sheet)}</div>
+    <div class="col">
+      <button class="btn block" data-act="stage" data-path="${esc(s.sheet)}">暂存这个文件</button>
+      <button class="btn block ghost danger" data-act="discard" data-path="${esc(s.sheet)}">丢弃改动（不可撤销）</button>
+      <button class="btn block ghost" data-act="closeSheet">取消</button>
+    </div>
+  </div>` : '');
+
+VariantD.footer = (s) => `
+  <textarea rows="2" placeholder="${s.amend ? 'amend：已带入上一条信息' : '提交信息'}" data-input="message">${esc(s.message)}</textarea>
+  <div class="actions4">
+    <button class="btn primary" data-act="commit" ${(!s.amend && !s.staged.length) || !s.message.trim() ? 'disabled' : ''}>${s.amend ? '修正提交' : '提交'}</button>
+    <button class="btn" data-act="toggleAmend">${s.amend ? '取消 amend' : '修正上次'}</button>
+    <button class="btn" data-act="stashSave">全部贮藏</button>
+    <button class="btn ghost" data-act="refresh">刷新</button>
+  </div>`;
+
+// ---------------------------------------------------------------------------
+// 切换器
+// ---------------------------------------------------------------------------
+const VARIANTS = {
+  A: { name: '行动流', render: VariantA, footer: VariantA.footer, note: '一行一个主按钮，提交条常驻' },
+  B: { name: '复核条', render: VariantB, footer: VariantB.footer, note: '多选批量 + 底部复核' },
+  C: { name: '控制台', render: VariantC, footer: VariantC.footer, note: '等宽高密度 + 键盘优先' },
+  D: { name: '卡片栈', render: VariantD, footer: VariantD.footer, sheet: VariantD.sheet, note: '卡片 + 底部动作面板' },
+};
+const ORDER = ['A', 'B', 'C', 'D'];
+
+const params = new URLSearchParams(location.search);
+const currentVariant = () => (params.get('variant') || 'A').toUpperCase();
+const currentWidth = () => (params.get('w') === '420' ? 420 : 340);
+
+function buildBar() {
+  const v = currentVariant();
+  const info = VARIANTS[v] || VARIANTS.A;
+  const bar = document.getElementById('bar');
+  bar.innerHTML = `
+    <button data-nav="-1" title="上一个 (←)">‹</button>
+    <span class="label">${v} <span class="tag">${info.name} · ${info.note}</span></span>
+    <button data-nav="1" title="下一个 (→)">›</button>
+    <span class="sep"></span>
+    ${ORDER.map((k) => `<button class="chip ${k === v ? 'on' : ''}" data-jump="${k}">${k}</button>`).join('')}
+    <span class="sep"></span>
+    <button class="chip ${currentWidth() === 340 ? 'on' : ''}" data-width="340">340</button>
+    <button class="chip ${currentWidth() === 420 ? 'on' : ''}" data-width="420">420</button>
+    <span class="sep"></span>
+    <button class="chip" data-act-toggle="state">状态</button>
+  `;
+}
+
+function renderState() {
+  const drawer = document.getElementById('state-drawer');
+  drawer.innerHTML = `<h4>STATE（内存，刷新即还原）</h4>
+    <pre style="margin:0; white-space:pre-wrap">${esc(JSON.stringify({
+      variant: currentVariant(),
+      branch: state.branch,
+      staged: state.staged.map((f) => f.path),
+      modified: state.modified.map((f) => f.path),
+      untracked: state.untracked.map((f) => f.path),
+      stashes: state.stashes.map((st) => st.ref),
+      message: state.message,
+      amend: state.amend,
+      selection: state.selection,
+      sheet: state.sheet,
+    }, null, 1))}</pre>
+    <h4 style="margin-top:8px">最近动作</h4>
+    <div class="log">${state.log.map((l) => `· ${esc(l)}`).join('<br/>')}</div>`;
+}
+
+function render() {
+  const v = currentVariant();
+  const variant = VARIANTS[v] || VARIANTS.A;
+  document.getElementById('sidebar').style.setProperty('--sidebar-width', `${currentWidth()}px`);
+  document.getElementById('sidebar').style.width = `${currentWidth()}px`;
+  document.getElementById('width-tag').textContent = `${currentWidth()}px`;
+  document.getElementById('stage').innerHTML = variant.render(state);
+  const footer = document.querySelector('.sidebar .footer');
+  if (footer) footer.remove();
+  if (variant.footer) {
+    const el = document.createElement('div');
+    el.className = 'footer';
+    el.innerHTML = variant.footer(state);
+    document.querySelector('.sidebar').appendChild(el);
+  }
+  document.getElementById('overlay').innerHTML = variant.sheet ? variant.sheet(state) : '';
+  buildBar();
+  renderState();
+}
+
+function go(variantKey) {
+  const next = params.get('variant') || 'A';
+  params.set('variant', variantKey);
+  history.replaceState(null, '', `?${params.toString()}`);
+  if (next !== variantKey) state.log.unshift(`切到 ${variantKey}（${VARIANTS[variantKey].name}）`);
+  render();
+}
+
+function cycle(delta) {
+  const i = ORDER.indexOf(currentVariant());
+  const next = ORDER[(i + delta + ORDER.length) % ORDER.length];
+  go(next);
+}
+
+// 事件委托：所有交互都走 data-*，四个变体共用一套分发
+document.addEventListener('click', (event) => {
+  const target = event.target.closest('[data-act], [data-nav], [data-jump], [data-width], [data-act-toggle]');
+  if (!target) return;
+
+  if (target.dataset.nav) return cycle(Number(target.dataset.nav));
+  if (target.dataset.jump) return go(target.dataset.jump);
+  if (target.dataset.width) {
+    params.set('w', target.dataset.width);
+    history.replaceState(null, '', `?${params.toString()}`);
+    return render();
+  }
+  if (target.dataset.actToggle === 'state') {
+    document.getElementById('state-drawer').classList.toggle('open');
+    return;
+  }
+
+  const act = target.dataset.act;
+  const path = target.dataset.path;
+  const ref = target.dataset.ref;
+
+  if (act === 'stage') return actions.stage(path);
+  if (act === 'unstage') return actions.unstage(path);
+  if (act === 'pickRepo') return actions.pickRepo(target.dataset.index);
+  if (act === 'discard') return actions.discard(path);
+  if (act === 'stageAll') return actions.stageAll();
+  if (act === 'unstageAll') return actions.unstageAll();
+  if (act === 'stageSelection') return actions.stageSelection();
+  if (act === 'toggleSelected') return actions.toggleSelected(path);
+  if (act === 'commit') return actions.commit();
+  if (act === 'stashSave') return actions.stashSave();
+  if (act === 'stashApply') return actions.stashApply(ref);
+  if (act === 'stashPop') return actions.stashPop(ref);
+  if (act === 'stashDrop') return actions.stashDrop(ref);
+  if (act === 'openSheet') return actions.openSheet(path);
+  if (act === 'closeSheet') return actions.closeSheet();
+  if (act === 'cursor') {
+    state.cursor = Number(target.dataset.index);
+    return render();
+  }
+  if (act === 'refresh') {
+    state.log.unshift('刷新（原型：假数据不变）');
+    return render();
+  }
+});
+
+document.addEventListener('change', (event) => {
+  const el = event.target;
+  if (el.dataset.act === 'toggleAmend') return actions.toggleAmend();
+  if (el.dataset.select === 'repo') {
+    state.repo = Number(el.value);
+    state.branch = state.repos[state.repo].branch;
+    return render();
+  }
+});
+
+document.addEventListener('input', (event) => {
+  const el = event.target;
+  if (el.dataset.input === 'message') {
+    state.message = el.value;
+    // 输入时只更新按钮可用态，避免光标丢失
+    const button = document.querySelector('.footer [data-act="commit"]');
+    if (button) {
+      const blocked = (!state.amend && !state.staged.length) || !state.message.trim();
+      button.disabled = blocked;
+    }
+    renderState();
+  }
+});
+
+document.addEventListener('keydown', (event) => {
+  const typing = ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName) || document.activeElement.isContentEditable;
+  if (typing) {
+    if (event.key === 'Enter' && document.activeElement.dataset.input === 'message') {
+      event.preventDefault();
+      actions.commit();
+    }
+    return;
+  }
+  if (event.key === 'ArrowLeft') return cycle(-1);
+  if (event.key === 'ArrowRight') return cycle(1);
+  if (currentVariant() !== 'C') return;
+  if (event.key === 'j') return actions.move(1);
+  if (event.key === 'k') return actions.move(-1);
+  const rows = consoleRows(state);
+  const at = rows[state.cursor];
+  if (!at) return;
+  if (event.key === 's' && !at.staged) return actions.stage(at.path);
+  if (event.key === 'u' && at.staged) return actions.unstage(at.path);
+  if (event.key === 'd') return actions.discard(at.path);
+  if (event.key === 'A') return actions.toggleAmend();
+});
+
+render();
+</script>
+</body>
+</html>

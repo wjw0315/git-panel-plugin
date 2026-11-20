@@ -1,0 +1,96 @@
+{
+  "manifestVersion": 2,
+  "id": "git-panel",
+  "name": "Git Panel",
+  "version": "0.1.0",
+  "description": "Amend the last commit, stash and restore work in progress, and switch between the repositories inside one workspace: the parts Orca's Source Control leaves to the terminal.",
+  "license": "MIT",
+  "engines": {
+    "orca": ">=1.4.248"
+  },
+  "execution": "trusted-worker",
+  "pluginApi": 1,
+  "main": "src/worker.ts",
+  "capabilities": [
+    {
+      "kind": "workspace:read"
+    },
+    {
+      "kind": "workspace:write"
+    },
+    {
+      "kind": "settings:own"
+    }
+  ],
+  "contributes": {
+    "panels": [
+      {
+        "id": "git-panel",
+        "title": "Git",
+        "icon": "layers",
+        "entry": "src/panel.tsx",
+        "ui": "components"
+      }
+    ],
+    "commands": [
+      {
+        "id": "git.stageAll",
+        "title": "Git: Stage all changes",
+        "when": "workspace"
+      },
+      {
+        "id": "git.amendStaged",
+        "title": "Git: Fold staged changes into the last commit",
+        "when": "workspace"
+      },
+      {
+        "id": "git.stashAll",
+        "title": "Git: Stash all changes",
+        "when": "workspace"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "git.stageAll",
+        "key": "Mod+Alt+S",
+        "when": "workspace"
+      },
+      {
+        "command": "git.amendStaged",
+        "key": "Mod+Alt+Shift+A",
+        "when": "workspace"
+      }
+    ],
+    "events": [
+      {
+        "on": "workspace.changed"
+      }
+    ],
+    "statusBarItems": [
+      {
+        "id": "git-branch",
+        "icon": "layers",
+        "text": "Git",
+        "tooltip": "Git Panel"
+      }
+    ],
+    "settings": [
+      {
+        "key": "refreshSeconds",
+        "title": "Status bar refresh",
+        "description": "How often the status bar re-reads the repository. 0 turns it off.",
+        "type": "integer",
+        "default": 15,
+        "minimum": 0,
+        "maximum": 600
+      },
+      {
+        "key": "allowDiscardUntracked",
+        "title": "Allow discarding untracked files",
+        "description": "Discarding an untracked file deletes it from disk and cannot be undone.",
+        "type": "boolean",
+        "default": false
+      }
+    ]
+  }
+}

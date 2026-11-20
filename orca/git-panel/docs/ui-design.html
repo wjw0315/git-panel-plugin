@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Orca Git 面板 · UI 设计稿 v3</title>
+<!--
+  设计稿，不是产品代码。规格见同目录 UI-DESIGN.md。
+  每个“屏幕”是一个 320px（最后一屏 280px）的右侧边栏，外面套一层假 Orca 外壳。
+  只用 Orca components 目录里存在的词汇：Stack / Row / Text / Button / IconButton /
+  Select / Textarea / Checkbox / ListItem / Collapsible / Callout / Badge / EmptyState / CodeView。
+  数据是假的，不碰 git。
+-->
+<style>
+  * { box-sizing: border-box; }
+  :root {
+    --page: #0e0f12;
+    --page-fg: #b9bdc7;
+    --page-dim: #6f7480;
+    --bg: #17181c;
+    --panel: #1d1f24;
+    --panel-2: #22252b;
+    --line: #2b2e36;
+    --line-strong: #363a44;
+    --fg: #d9dbe1;
+    --muted: #8b909b;
+    --accent: #7b9cf0;
+    --accent-soft: #7b9cf022;
+    --success: #58b184;
+    --warning: #d3a25c;
+    --danger: #d97b72;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
+  }
+  body.light-mode { }
+  html, body { margin: 0; background: var(--page); color: var(--page-fg); font-family: var(--sans); }
+
+  /* ── 页面 ─────────────────────────────────────────── */
+  .sheet { max-width: 1480px; margin: 0 auto; padding: 48px 40px 80px; }
+  .sheet-head { display: flex; align-items: baseline; gap: 20px; flex-wrap: wrap; padding-bottom: 22px; border-bottom: 1px solid #24262c; }
+  .sheet-head h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: #e9ebf0; }
+  .sheet-head .meta { font-size: 12px; color: var(--page-dim); line-height: 1.7; }
+  .sheet-head .meta b { color: #9aa0ad; font-weight: 500; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 34px 28px; margin-top: 34px; }
+  .screen { display: flex; flex-direction: column; gap: 12px; }
+  .screen > .cap { font-size: 12px; color: var(--page-dim); line-height: 1.6; }
+  .screen > .cap b { display: block; color: #c8ccd5; font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+  .screen > .cap code { font-family: var(--mono); font-size: 11px; color: #8f95a1; }
+
+  /* ── 假 Orca 外壳 ─────────────────────────────────── */
+  .app { display: flex; height: 560px; border: 1px solid #24262c; border-radius: 10px; overflow: hidden; background: var(--bg); }
+  .app .main { flex: 1; background: var(--bg); display: flex; flex-direction: column; min-width: 0; }
+  .app .chrome { height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+  .app .dots { display: flex; gap: 4px; }
+  .app .dots i { width: 8px; height: 8px; border-radius: 50%; background: #3a3e47; display: block; }
+  .app .ghost { flex: 1; background: repeating-linear-gradient(180deg, transparent 0 30px, #ffffff06 30px 31px); opacity: .5; }
+  .side { width: 320px; flex: none; background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; overflow: hidden; }
+  .side.narrow { width: 280px; }
+  .side .side-head { height: 30px; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; border-bottom: 1px solid var(--line); font-size: 11px; color: var(--fg); font-weight: 600; letter-spacing: .02em; }
+  .side .side-head span { color: var(--muted); font-weight: 400; }
+  .side .body { padding: 8px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; flex: 1; }
+
+  /* 亮色 */
+  .light { --bg: #f3f4f6; --panel: #ffffff; --panel-2: #f7f8fa; --line: #e3e5ea; --line-strong: #d3d6dd;
+           --fg: #24272e; --muted: #6b7280; --accent: #3f63c8; --success: #2f8b5f; --warning: #9a6b20; --danger: #b4453c; }
+  .light .side { border-left-color: var(--line); }
+
+  /* ── 组件词汇 ─────────────────────────────────────── */
+  .row { display: flex; align-items: center; gap: 6px; }
+  .row.between { justify-content: space-between; }
+  .stack { display: flex; flex-direction: column; gap: 4px; }
+
+  .txt { font-size: 13px; color: var(--fg); line-height: 1.35; }
+  .txt.sm { font-size: 12px; }
+  .txt.xs { font-size: 11px; }
+  .txt.muted { color: var(--muted); }
+  .txt.mono { font-family: var(--mono); font-size: 11px; }
+  .txt.medium { font-weight: 500; }
+
+  .ibtn { width: 22px; height: 22px; display: inline-grid; place-items: center; border-radius: 5px; color: var(--muted); font-size: 12px; line-height: 1; flex: none; }
+  .ibtn.hot { color: var(--fg); }
+  .ibtn.danger { color: var(--danger); }
+  .ibtn:hover { background: var(--panel-2); }
+
+  .btn { height: 24px; padding: 0 9px; display: inline-flex; align-items: center; gap: 5px; border-radius: 5px; font-size: 12px; border: 1px solid transparent; color: var(--fg); background: transparent; white-space: nowrap; }
+  .btn.solid { background: var(--accent); color: #10131a; font-weight: 600; }
+  .btn.solid.dis { background: var(--panel-2); color: var(--muted); font-weight: 500; box-shadow: inset 0 0 0 1px var(--line-strong); }
+  .btn.outline { border-color: var(--line-strong); }
+  .btn.ghost { color: var(--muted); }
+  .btn.sm { height: 22px; font-size: 11px; padding: 0 7px; }
+  .btn .caret { opacity: .7; font-size: 9px; }
+
+  .sel { height: 26px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 8px; border: 1px solid var(--line-strong); border-radius: 5px; font-size: 12px; color: var(--fg); background: var(--panel-2); }
+  .sel .kv { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .sel .kind { color: var(--muted); font-size: 11px; }
+  .sel .name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sel .br { color: var(--muted); font-family: var(--mono); font-size: 11px; }
+  .sel .chev { color: var(--muted); font-size: 9px; }
+
+  .menu { border: 1px solid var(--line-strong); border-radius: 6px; background: var(--panel-2); padding: 4px; box-shadow: 0 12px 28px #00000055; }
+  .menu .mi { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 7px; border-radius: 4px; font-size: 12px; color: var(--fg); min-height: 26px; }
+  .menu .mi .why { color: var(--muted); font-size: 11px; }
+  .menu .mi.on { background: var(--accent-soft); color: var(--accent); }
+  .menu .mi.dis { color: var(--muted); }
+  .menu .sep { height: 1px; background: var(--line); margin: 4px 2px; }
+
+  .box { border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+  .ta { min-height: 54px; border: 1px solid var(--line-strong); border-radius: 5px; padding: 6px 7px; font-size: 12px; color: var(--muted); background: var(--panel); }
+  .ta.filled { color: var(--fg); }
+
+  .cbx { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .cbx i { width: 12px; height: 12px; border: 1px solid var(--line-strong); border-radius: 3px; display: block; }
+  .cbx.on i { background: var(--accent); border-color: var(--accent); }
+
+  .badge { font-size: 10px; padding: 1px 6px; border-radius: 999px; border: 1px solid currentColor; color: var(--muted); line-height: 1.5; }
+  .badge.accent { color: var(--accent); }
+  .badge.success { color: var(--success); }
+  .badge.warning { color: var(--warning); }
+
+  .callout { border: 1px solid currentColor; border-radius: 6px; padding: 7px 8px; font-size: 12px; display: flex; flex-direction: column; gap: 6px; }
+  .callout.danger { color: var(--danger); background: color-mix(in oklab, var(--danger) 8%, transparent); }
+  .callout .ttl { font-weight: 600; }
+
+  .ghead { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 2px 2px 0; }
+  .ghead .lbl { font-size: 12px; font-weight: 600; color: var(--fg); }
+  .ghead .cnt { font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 5px; }
+  .ghead .acts { display: flex; gap: 1px; }
+
+  .li { display: flex; align-items: center; gap: 6px; min-height: 28px; padding: 2px 4px 2px 2px; border-radius: 4px; }
+  .li:hover { background: var(--panel-2); }
+  .li .letter { width: 14px; flex: none; text-align: center; font-size: 11px; font-weight: 600; font-family: var(--mono); }
+  .li .letter.m { color: var(--warning); }
+  .li .letter.a { color: var(--success); }
+  .li .letter.d { color: var(--danger); }
+  .li .letter.r { color: var(--accent); }
+  .li .nm { min-width: 0; display: flex; flex-direction: column; gap: 1px; flex: 1; }
+  .li .nm .b { font-size: 12px; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .li .nm .d { font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+  .li .acts { display: flex; gap: 0; flex: none; opacity: .85; }
+  .li.folder { min-height: 26px; }
+  .li.folder .nm .b { font-weight: 500; }
+  .li .stat { font-size: 10.5px; font-family: var(--mono); flex: none; color: var(--muted); }
+  .li .stat .p { color: var(--success); }
+  .li .stat .n { color: var(--danger); }
+
+  .empty { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 26px 12px; color: var(--muted); text-align: center; }
+  .empty .t { font-size: 12.5px; color: var(--fg); font-weight: 500; }
+  .empty .d { font-size: 11px; line-height: 1.5; }
+
+  .footer { margin-top: auto; padding: 6px 8px 8px; border-top: 1px solid var(--line); }
+
+  .codeview { border: 1px solid var(--line); border-radius: 5px; background: #12141a; font-family: var(--mono); font-size: 10.5px; line-height: 1.6; overflow-x: auto; padding: 6px 0; }
+  .light .codeview { background: #f8f9fb; }
+  .codeview div { padding: 0 8px; white-space: pre; }
+  .codeview .hunk { color: var(--accent); background: var(--accent-soft); }
+  .codeview .add { color: var(--success); }
+  .codeview .del { color: var(--danger); }
+  .codeview .ctx { color: var(--muted); }
+
+  .legend { margin-top: 44px; border-top: 1px solid #24262c; padding-top: 22px; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 22px 40px; font-size: 12px; line-height: 1.65; color: var(--page-dim); }
+  .legend h2 { grid-column: 1 / -1; font-size: 13px; color: #c8ccd5; margin: 0 0 2px; font-weight: 600; }
+  .legend b { color: #9aa0ad; font-weight: 600; }
+  .legend code { font-family: var(--mono); font-size: 11px; color: #8f95a1; }
+  .swatch { display: flex; gap: 14px; flex-wrap: wrap; }
+  .swatch span { display: inline-flex; align-items: center; gap: 5px; }
+  .swatch i { width: 10px; height: 10px; border-radius: 3px; display: block; }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <header class="sheet-head">
+    <h1>Orca Git 面板 · UI 设计 v3</h1>
+    <div class="meta">
+      <b>基线</b> 内置 Source Control 1:1 · <b>唯一增量</b> 仓库切换器（repos &gt; 1 时出现）<br />
+      规格 <b>docs/UI-DESIGN.md</b> · 落地 <code>src/app.tsx</code> <code>commit-card.tsx</code> <code>changes-tree.tsx</code>
+    </div>
+  </header>
+
+  <div class="grid">
+
+    <!-- A. 单仓库 · 干净 -->
+    <div class="screen">
+      <div class="cap"><b>A · 单仓库，工作区干净</b>无切换器（repos = 1），面板与内置同级；提交盒在首屏内，主按钮因「未暂存」而禁用。</div>
+      <div class="app">
+        <div class="main"><div class="chrome"><div class="dots"><i></i><i></i><i></i></div>geer2-xforms</div><div class="ghost"></div></div>
+        <div class="side"><div class="side-head">GIT <span>·</span></div>
+          <div class="body">
+            <div class="row between">
+              <div class="row"><span class="ibtn">⎇</span><span class="txt medium">main</span><span class="ibtn" style="font-family:var(--mono);font-size:10px">&lt;&gt;</span></div>
+              <div class="row"><span class="badge success">干净</span><span class="ibtn">⌕</span><span class="ibtn">···</span></div>
+            </div>
+            <div class="row between"><span class="txt xs muted">↑0 ↓0 · origin/main</span><span class="badge accent">PR #128</span></div>
+
+            <div class="box">
+              <div class="ta">Message</div>
+              <div class="row between">
+                <span class="btn solid sm dis">提交 <span class="caret">▾</span></span>
+                <span class="ibtn hot">···</span>
+              </div>
+            </div>
+            <div class="cbx"><i></i>Amend last commit</div>
+
+            <div class="empty"><div class="t">没有待提交的更改</div><div class="d">工作区与 main 一致</div></div>
+          </div>
+          <div class="footer"><span class="btn ghost sm">↗ 在内置 Source Control 中打开</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- B. 多仓库 · 有改动 -->
+    <div class="screen">
+      <div class="cap"><b>B · 多仓库，有改动</b>切换器出现，一行，与分支行同重；分组头右侧是三个批量动作；行内最多 3 个动作。</div>
+      <div class="app">
+        <div class="main"><div class="chrome"><div class="dots"><i></i><i></i><i></i></div>geer2-xforms</div><div class="ghost"></div></div>
+        <div class="side"><div class="side-head">GIT <span>·</span></div>
+          <div class="body">
+            <div class="sel"><div class="kv"><span class="kind">主仓库 ·</span><span class="name">geer2-xforms</span><span class="br">main</span><span style="color:var(--warning)">●</span></div><span class="chev">▾</span></div>
+
+            <div class="row between">
+              <div class="row"><span class="ibtn">⎇</span><span class="txt medium">main</span><span class="ibtn" style="font-family:var(--mono);font-size:10px">&lt;&gt;</span></div>
+              <div class="row"><span class="badge warning">有改动</span><span class="ibtn">···</span></div>
+            </div>
+            <div class="row between"><span class="txt xs muted">↑2 ↓0 · origin/main</span><span class="badge accent">PR #128</span></div>
+
+            <div class="box">
+              <div class="ta filled">fix(scm): 冲突横幅的 continue 走 rebase --continue</div>
+              <div class="row between">
+                <span class="btn solid sm">提交 <span class="caret">▾</span></span>
+                <span class="ibtn hot">···</span>
+              </div>
+            </div>
+            <div class="cbx"><i></i>Amend last commit</div>
+
+            <div class="ghead"><div><span class="lbl">已暂存的更改</span><span class="cnt">3</span></div>
+              <div class="acts"><span class="ibtn">+</span><span class="ibtn">−</span><span class="ibtn danger">🗑</span></div></div>
+            <div class="li"><span class="letter m">M</span><div class="nm"><span class="b">panel.check.ts</span><span class="d">src/</span></div><span class="stat">+18 <span class="n">−2</span></span><div class="acts"><span class="ibtn">−</span><span class="ibtn" style="font-family:var(--mono);font-size:10px">&lt;&gt;</span><span class="ibtn">↗</span></div></div>
+            <div class="li"><span class="letter a">A</span><div class="nm"><span class="b">ui-design.html</span><span class="d">docs/</span></div><span class="stat"><span class="p">+612</span></span><div class="acts"><span class="ibtn">−</span><span class="ibtn" style="font-family:var(--mono);font-size:10px">&lt;&gt;</span><span class="ibtn">↗</span></div></div>
+            <div class="li"><span class="letter d">D</span><div class="nm"><span class="b">old-panel.tsx</span><span class="d">src/legacy/</span></div><span class="stat"><span class="n">−240</span></span><div class="acts"><span class="ibtn">−</span><span class="ibtn danger">🗑</span><span class="ibtn">↗</span></div></div>
+
+            <div class="ghead"><div><span class="lbl">更改</span><span class="cnt">2</span></div>
+              <div class="acts"><span class="ibtn">+</span><span class="ibtn danger">🗑</span></div></div>
+            <div class="li"><span class="letter m">M</span><div class="nm"><span class="b">state.ts</span><span class="d">src/</span></div><span class="stat">+12 <span class="n">−4</span></span><div class="acts"><span class="ibtn">+</span><span class="ibtn" style="font-family:var(--mono);font-size:10px">&lt;&gt;</span><span class="ibtn">↗</span></div></div>
+            <div class="li"><span class="letter a">?</span><div class="nm"><span class="b">scratch.md</span><span class="d">笔记/</span></div><span class="stat"></span><div class="acts"><span class="ibtn">+</span><span class="ibtn danger">🗑</span><span class="ibtn">↗</span></div></div>
+          </div>
+          <div class="footer"><span class="btn ghost sm">↗ 在内置 Source Control 中打开</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- C. 切换器展开 · 子模块选中 -->
+    <div class="screen">
+      <div class="cap"><b>C · 切换器展开，已选中子模块</b>选项格式 <code>kind · name (branch) ●</code>；未初始化子模块禁用；主按钮改文案「提交到 子模块 …」，只在这一处提示写入目标。</div>
+      <div class="app">
+        <div class="main"><div class="chrome"><div class="dots"><i></i><i></i><i></i></div>geer2-xforms</div><div class="ghost"></div></div>
+        <div class="side"><div class="side-head">GIT <span>·</span></div>
+          <div class="body">
+            <div class="sel" style="border-color:var(--accent)"><div class="kv"><span class="kind">子模块 ·</span><span class="name">vendor/lib</span><span class="br">main</span></div><span class="chev">▴</span></div>
+            <div class="menu">
+              <div class="mi"><span>主仓库 · geer2-xforms</span><span class="br" style="font-family:var(--mono);font-size:11px;color:var(--muted)">main <span style="color:var(--warning)">●</span></span></div>
+              <div class="mi on"><span>子模块 · vendor/lib</span><span class="br" style="font-family:var(--mono);font-size:11px;color:var(--muted)">main</span></div>
+              <div class="mi dis"><span>子模块 · vendor/proto</span><span class="why">未初始化</span></div>
+              <div class="mi"><span>嵌套仓库 · tools/cli</span><span class="br" style="font-family:var(--mono);font-size:11px;color:var(--muted)">dev <span style="color:var(--warning)">●</span></span></div>
+            </div>
+
+            <div class="row between">
+              <div class="row"><span class="ibtn">⎇</span><span class="txt medium">main</span><span class="ibtn" style="font-family:var(--mono);font-size:10px">&lt;&gt;</span></div>
+              <div class="row"><span class="badge warning">有改动</span><span class="ibtn">···</span></div>
+            </div>
+            <div class="row between"><span class="txt xs muted">↑0 ↓1 · origin/main</span><span class="txt xs muted">vendor/lib</span></div>
+
+            <div class="box">
+              <div class="ta">Message</div>
+              <div class="row between">
+                <span class="btn outline sm">提交到 子模块 vendor/lib</span>
+                <span class="ibtn hot">···</span>
+              </div>
+            </div>
+
+            <div class="ghead"><div><span class="lbl">更改</span><span class="cnt">1</span></div>
+              <div class="acts"><span class="ibtn">+</span><span class="ibtn danger">🗑</span></div></div>
+            <div class="li"><span class="letter m">M</span><div class="nm"><span class="b">index.ts</span><span class="d">src/</span></div><span class="stat">+3 <span class="n">−1</span></span><div class="acts"><span class="ibtn">+</span><span class="ibtn" style="font-family:var(--mono);font-size:10px">&lt;&gt;</span><span class="ibtn">↗</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- D. 冲突 -->
+    <div class="screen">
+      <div class="cap"><b>D · 合并冲突</b>冲突条永远是第一个区块，抢在提交盒之前；主按钮禁用并给出原因「有冲突」；每行三个解决方案按钮。</div>
+      <div class="app">
+        <div class="main"><div class="chrome"><div class="dots"><i></i><i></i><i></i></div>geer2-xforms</div><div class="ghost"></div></div>
+        <div class="side"><div class="side-head">GIT <span>·</span></div>
+          <div class="body">
+            <div class="sel"><div class="kv"><span class="kind">主仓库 ·</span><span class="name">geer2-xforms</span><span class="br">main</span></div><span class="chev">▾</span></div>
+
+            <div class="row between">
+              <div class="row"><span class="ibtn">⎇</span><span class="txt medium">main</span><span class="ibtn" style="font-family:var(--mono);font-size:10px">&lt;&gt;</span></div>
+              <div class="row"><span class="badge warning">合并中</span><span class="ibtn">···</span></div>
+            </div>
+
+            <div class="callout danger">
+              <div class="row between"><span class="ttl">合并进行中</span><span class="txt xs">2 个冲突</span></div>
+              <div class="row" style="gap:4px"><span class="btn outline sm">中止合并</span><span class="btn ghost sm">完成合并</span></div>
+            </div>
+
+            <div class="li"><span class="letter d">!</span><div class="nm"><span class="b">source-control-tree.ts</span><span class="d">shared/</span></div><span class="stat">双方修改</span></div>
+            <div class="row" style="padding-left:20px;gap:4px"><span class="btn outline sm">标记已解决</span><span class="btn ghost sm">保留文件</span><span class="btn ghost sm">保留删除</span></div>
+
+            <div class="box" style="margin-top:4px">
+              <div class="ta">Message</div>
+              <div class="row between">
+                <span class="btn solid sm dis">提交 <span class="caret">▾</span></span>
+                <span class="txt xs muted">有冲突</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- E. 更多动作 -->
+    <div class="screen">
+      <div class="cap"><b>E · 更多提交与远端操作</b>13 项照抄内置溢出菜单，顺序不变；不可用项右侧给原因而不是只置灰；Force Push 单独 danger 分组。</div>
+      <div class="app">
+        <div class="main"><div class="chrome"><div class="dots"><i></i><i></i><i></i></div>geer2-xforms</div><div class="ghost"></div></div>
+        <div class="side"><div class="side-head">GIT <span>·</span></div>
+          <div class="body">
+            <div class="row between"><span class="txt medium">更多提交与远端操作</span><span class="btn ghost sm">← 返回</span></div>
+            <div class="menu">
+              <div class="mi"><span>提交</span><span class="why">未暂存任何文件</span></div>
+              <div class="mi"><span>提交并推送</span><span class="why">未发布</span></div>
+              <div class="mi"><span>提交并同步</span><span class="why">未发布</span></div>
+              <div class="mi"><span>提交并强推</span><span class="why">请先提交更改</span></div>
+              <div class="sep"></div>
+              <div class="mi"><span>推送</span><span class="why">分支已是最新</span></div>
+              <div class="mi"><span>强推（with lease）</span><span class="why">请先强推</span></div>
+              <div class="mi"><span>发布分支</span><span class="why">分支已发布</span></div>
+              <div class="sep"></div>
+              <div class="mi"><span>获取（--prune）</span></div>
+              <div class="mi"><span>拉取（--no-rebase）</span></div>
+              <div class="mi"><span>快进（--ff-only）</span><span class="why">无可快进</span></div>
+              <div class="mi"><span>同步</span></div>
+              <div class="mi"><span>变基到上游</span></div>
+              <div class="sep"></div>
+              <div class="mi"><span>创建 PR</span><span class="why">有未提交更改</span></div>
+              <div class="mi"><span>先推再建 PR</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- F. 历史 -->
+    <div class="screen">
+      <div class="cap"><b>F · 历史</b>过滤框贴在页签下；提交行 = sha + 主题 + 作者 + 相对时间；展开是文件清单与只读 diff。</div>
+      <div class="app">
+        <div class="main"><div class="chrome"><div class="dots"><i></i><i></i><i></i></div>geer2-xforms</div><div class="ghost"></div></div>
+        <div class="side"><div class="side-head">GIT <span>·</span></div>
+          <div class="body">
+            <div class="row" style="gap:2px"><span class="btn outline sm">← 返回更改</span><span class="btn ghost sm" style="opacity:.45">历史</span><span class="btn ghost sm">贮藏</span><span class="btn ghost sm">分支</span></div>
+            <div class="sel" style="background:var(--panel)"><span class="txt xs muted">按主题或哈希前缀过滤…</span><span class="ibtn">⌕</span></div>
+
+            <div class="li"><div class="nm"><span class="b">fix(scm): 冲突横幅的 continue 走 rebase --continue</span><span class="d">958dd95 · 我 · 2 小时前</span></div></div>
+            <div class="li" style="background:var(--panel-2)"><div class="nm"><span class="b">feat: 多仓库切换器</span><span class="d">8c1de20 · 我 · 昨天</span></div></div>
+            <div style="padding-left:22px" class="stack">
+              <div class="row" style="gap:4px"><span class="txt mono">M src/state.ts</span><span class="txt xs mono" style="color:var(--success)">+42</span><span class="txt xs mono" style="color:var(--danger)">−6</span></div>
+              <div class="codeview">
+                <div class="hunk">@@ -12,3 +12,5 @@</div>
+                <div class="ctx">  const selected = atom('')</div>
+                <div class="del">-  const repos = atom([])</div>
+                <div class="add">+  const repos = atom&lt;Repo[]&gt;([])</div>
+                <div class="add">+  const kinds = atom({})</div>
+              </div>
+            </div>
+            <div class="li"><div class="nm"><span class="b">chore: 图标改 layers</span><span class="d">a0f31c8 · 我 · 3 天前</span></div></div>
+            <span class="btn ghost sm" style="align-self:center">加载更多</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- G. 亮色 -->
+    <div class="screen">
+      <div class="cap"><b>G · 亮色</b>同一屏 B 的亮色版本：全部颜色来自宿主 theme，没有任何自建色值与阴影。</div>
+      <div class="app light">
+        <div class="main"><div class="chrome"><div class="dots"><i></i><i></i><i></i></div>geer2-xforms</div><div class="ghost" style="background:repeating-linear-gradient(180deg,transparent 0 30px,#00000006 30px 31px)"></div></div>
+        <div class="side"><div class="side-head">GIT <span>·</span></div>
+          <div class="body">
+            <div class="sel"><div class="kv"><span class="kind">主仓库 ·</span><span class="name">geer2-xforms</span><span class="br">main</span><span style="color:var(--warning)">●</span></div><span class="chev">▾</span></div>
+            <div class="row between">
+              <div class="row"><span class="ibtn">⎇</span><span class="txt medium">main</span><span class="ibtn" style="font-family:var(--mono);font-size:10px">&lt;&gt;</span></div>
+              <div class="row"><span class="badge warning">有改动</span><span class="ibtn">···</span></div>
+            </div>
+            <div class="box">
+              <div class="ta filled">fix(scm): 冲突横幅的 continue 走 rebase --continue</div>
+              <div class="row between">
+                <span class="btn solid sm">提交 <span class="caret">▾</span></span>
+                <span class="ibtn hot">···</span>
+              </div>
+            </div>
+            <div class="ghead"><div><span class="lbl">已暂存的更改</span><span class="cnt">1</span></div>
+              <div class="acts"><span class="ibtn">+</span><span class="ibtn">−</span><span class="ibtn danger">🗑</span></div></div>
+            <div class="li"><span class="letter m">M</span><div class="nm"><span class="b">panel.check.ts</span><span class="d">src/</span></div><span class="stat">+18 <span class="n">−2</span></span><div class="acts"><span class="ibtn">−</span><span class="ibtn" style="font-family:var(--mono);font-size:10px">&lt;&gt;</span><span class="ibtn">↗</span></div></div>
+            <div class="ghead"><div><span class="lbl">更改</span><span class="cnt">1</span></div>
+              <div class="acts"><span class="ibtn">+</span><span class="ibtn danger">🗑</span></div></div>
+            <div class="li"><span class="letter m">M</span><div class="nm"><span class="b">state.ts</span><span class="d">src/</span></div><span class="stat">+12 <span class="n">−4</span></span><div class="acts"><span class="ibtn">+</span><span class="ibtn" style="font-family:var(--mono);font-size:10px">&lt;&gt;</span><span class="ibtn">↗</span></div></div>
+          </div>
+          <div class="footer"><span class="btn ghost sm">↗ 在内置 Source Control 中打开</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- H. 280px 窄 -->
+    <div class="screen">
+      <div class="cap"><b>H · 280px 最窄</b>无横向滚动：路径左截断保留 basename，行内动作压到 2 个（差异、打开），其余进目录级批量。</div>
+      <div class="app">
+        <div class="main"><div class="chrome"><div class="dots"><i></i><i></i><i></i></div>geer2-xforms</div><div class="ghost"></div></div>
+        <div class="side narrow"><div class="side-head">GIT <span>·</span></div>
+          <div class="body">
+            <div class="sel"><div class="kv"><span class="kind">子模块 ·</span><span class="name">lib</span><span class="br">main</span><span style="color:var(--warning)">●</span></div><span class="chev">▾</span></div>
+            <div class="row between"><div class="row"><span class="ibtn">⎇</span><span class="txt medium">main</span><span class="ibtn" style="font-family:var(--mono);font-size:10px">&lt;&gt;</span></div><span class="badge warning">有改动</span></div>
+            <div class="box">
+              <div class="ta">Message</div>
+              <div class="row between"><span class="btn solid sm dis">提交 <span class="caret">▾</span></span><span class="ibtn hot">···</span></div>
+            </div>
+            <div class="ghead"><div><span class="lbl">更改</span><span class="cnt">2</span></div><div class="acts"><span class="ibtn">+</span><span class="ibtn danger">🗑</span></div></div>
+            <div class="li"><span class="letter m">M</span><div class="nm"><span class="b">source-control-tree.ts</span><span class="d">shared/…</span></div><div class="acts"><span class="ibtn" style="font-family:var(--mono);font-size:10px">&lt;&gt;</span><span class="ibtn">↗</span></div></div>
+            <div class="li"><span class="letter a">?</span><div class="nm"><span class="b">new-file-with-a-long-name.tsx</span><span class="d">src/…</span></div><div class="acts"><span class="ibtn" style="font-family:var(--mono);font-size:10px">&lt;&gt;</span><span class="ibtn">↗</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="legend">
+    <h2>对照表</h2>
+    <div>
+      <b>状态字母</b>（固定 14px 列，宿主 icon 白名单里没有 M/A/D）<br />
+      <div class="swatch" style="margin-top:6px">
+        <span><i style="background:var(--warning)"></i>M 修改</span>
+        <span><i style="background:var(--success)"></i>A / ? 新增·未跟踪</span>
+        <span><i style="background:var(--danger)"></i>D / ! 删除·冲突</span>
+        <span><i style="background:var(--accent)"></i>R / C 改名·复制</span>
+      </div>
+    </div>
+    <div>
+      <b>行内动作</b>固定顺序，最多 4 个：内容动作（stage / unstage / discard / 删除）→ 差异 → 打开文件 → 丢弃；<br />
+      目录行与分组头用同一套批量图标，位置固定在右侧。
+    </div>
+    <div>
+      <b>图标只用白名单</b>批量 stage <code>add</code> · unstage <code>remove</code> · discard <code>delete</code>；行内差异 <code>code</code>；打开文件 <code>open-external</code>；分支 <code>branch</code>；刷新 <code>refresh</code>；更多 <code>more</code>；面板与状态栏 <code>layers</code>。
+    </div>
+    <div>
+      <b>禁用态</b>提交按钮在「未暂存 / 无信息 / 有冲突」时变 <code>variant="outline"</code> 且文字降为 <code>muted</code>，右侧给一行原因；不弹提示、不改布局。
+    </div>
+    <div>
+      <b>唯一增量</b>仓库切换器：<code>kind · name (branch) ●</code>，只在 <code>repos.length &gt; 1</code> 时渲染。<br />
+      选中子模块/嵌套仓库时，提交按钮文案改写成「提交到 子模块 …」，不额外加横幅。
+    </div>
+    <div>
+      <b>不复刻</b>AI 生成提交信息、托管 PR 编辑器、图谱画布：底部一行「在内置 Source Control 中打开」。<br />
+      不复刻也不自创：tag、reset、cherry-pick 主动发起、双栏 diff。
+    </div>
+  </div>
+</div>
+</body>
+</html>
