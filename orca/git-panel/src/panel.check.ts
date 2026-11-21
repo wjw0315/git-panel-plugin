@@ -19,6 +19,18 @@ const snapshot: GitSnapshot = {
     cli: null,
     baseBranch: 'main',
   },
+  base: {
+    ref: 'origin/main',
+    exists: true,
+    ahead: 3,
+    commits: [
+      { sha: '9f8e7d6', subject: 'feat: base moved on' },
+      { sha: '8a7b6c5', subject: 'fix: base also fixed this' },
+      { sha: '7c6b5a4', subject: 'chore: base housekeeping' },
+    ],
+   overwritten: { files: [], total: 0 },
+    fellBackTo: null,
+  },
   operation: null,
   conflicts: [],
   staged: [{ path: 'src/panel.tsx', status: 'modified', additions: 12, deletions: 3 }],
@@ -82,7 +94,7 @@ export default defineCheck({
       'workspace.readContext': { workspaceId: 'ws-1', branch: 'feat/git-panel', displayName: 'repo', terminals: [] },
     },
     settings: { refreshSeconds: 0 },
-    persisted: { workspace: { selectedRepo: '/repo' }, plugin: { view: 'stashes' } },
+    persisted: { workspace: { selectedRepo: '/repo' }, plugin: { tab: 'stash' } },
     requests: {
       'git.repos': () => repos,
       'git.snapshot': () => snapshot,
@@ -107,7 +119,7 @@ export default defineCheck({
       'workspace.readContext': { workspaceId: 'ws-1', branch: 'feat/git-panel', displayName: 'repo', terminals: [] },
     },
     settings: { refreshSeconds: 0 },
-    persisted: { plugin: { view: 'actions' } },
+    persisted: { plugin: { tab: 'remote' } },
     requests: {
       'git.repos': () => repos,
       'git.snapshot': () => snapshot,
@@ -135,12 +147,35 @@ export default defineCheck({
       'git.pullRequestStatus': () => null,
     },
   },
+  base: {
+    results: {
+      'workspace.readContext': { workspaceId: 'ws-1', branch: 'feat/git-panel', displayName: 'repo', terminals: [] },
+    },
+    settings: { refreshSeconds: 0 },
+    persisted: { workspace: { selectedRepo: '/repo' }, plugin: { tab: 'base' } },
+    requests: {
+      'git.repos': () => repos,
+      'git.snapshot': () => snapshot,
+      'git.stashList': () => ({ stashes: [] }),
+      'git.branchList': () => ({
+        branches: [
+          { name: 'feat/git-panel', remote: false, current: true },
+          { name: 'main', remote: false, current: false },
+          { name: 'origin/main', remote: true, current: false },
+          { name: 'origin/release', remote: true, current: false },
+        ],
+        detached: false,
+      }),
+      'git.log': () => ({ commits: [], hasMore: false }),
+      'git.pullRequestStatus': () => null,
+    },
+  },
   history: {
     results: {
       'workspace.readContext': { workspaceId: 'ws-1', branch: 'feat/git-panel', displayName: 'repo', terminals: [] },
     },
     settings: { refreshSeconds: 0 },
-    persisted: { workspace: { selectedRepo: '/repo' }, plugin: { view: 'history' } },
+    persisted: { workspace: { selectedRepo: '/repo' }, plugin: { tab: 'history' } },
     requests: {
       'git.repos': () => repos,
       'git.snapshot': () => snapshot,

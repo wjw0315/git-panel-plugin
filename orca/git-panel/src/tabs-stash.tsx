@@ -3,13 +3,11 @@
 import { Button, EmptyState, List, ListItem, read, RelativeTime, Row, set, Stack, Switch } from 'orca'
 import type { Copy } from './strings'
 import { includeUntracked, newStash, stashOp, stashes } from './state'
-import { navRow } from './rows'
 
 export function stashTab(text: Copy) {
   const stashList = read(stashes)
   return (
     <Stack gap="sm">
-      {navRow(text, 'stashes')}
       <Row justify="between" align="center">
         <Switch
           label={text.includeUntracked}

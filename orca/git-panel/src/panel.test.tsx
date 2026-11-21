@@ -3,6 +3,7 @@
 // 这类断言走 view.tree() 正则。
 import { assert, mockHost, mount, test } from 'orca/testing'
 import * as panel from './panel'
+import { buildTree } from './changes-tree'
 import type { GitSnapshot, StashEntry } from './protocol'
 
 const snapshot: GitSnapshot = {
@@ -21,6 +22,17 @@ const snapshot: GitSnapshot = {
     compareUrl: 'https://github.com/jiaweiwu/git-panel-plugin/compare/main...feat%2Fgit-panel?expand=1',
     cli: null,
     baseBranch: 'main',
+  },
+  base: {
+    ref: 'origin/main',
+    exists: true,
+    ahead: 2,
+    commits: [
+      { sha: '9f8e7d6', subject: 'feat: base moved on' },
+      { sha: '8a7b6c5', subject: 'fix: base also fixed this' },
+    ],
+   overwritten: { files: [], total: 0 },
+    fellBackTo: null,
   },
   operation: null,
   conflicts: [],
@@ -45,7 +57,13 @@ const stash: StashEntry = {
   at: 1_700_000_000_000,
 }
 
-function harness(options: { local?: boolean; snapshotOverride?: GitSnapshot } = {}) {
+function harness(
+  options: {
+    local?: boolean
+    snapshotOverride?: GitSnapshot
+    mergeOutcome?: 'auth-failure' | 'degraded'
+  } = {}
+) {
   const calls: string[] = []
   const host = mockHost({
     results: {
@@ -72,6 +90,7 @@ function harness(options: { local?: boolean; snapshotOverride?: GitSnapshot } = 
       }),
       'git.snapshot': (input) => {
         calls.push(`snapshot:${input.repoRoot}`)
+        if (input.base) calls.push(`base:${input.base}`)
         return options.snapshotOverride ?? snapshot
       },
       'git.stashList': () => ({ stashes: [stash] }),
@@ -163,6 +182,37 @@ function harness(options: { local?: boolean; snapshotOverride?: GitSnapshot } = 
         calls.push('rebase')
         return snapshot
       },
+      'git.mergeBase': (input) => {
+        calls.push(`mergeBase:${String(input.fetch !== false)}`)
+        const merged = {
+          ...snapshot,
+          base: {
+            ref: 'origin/main',
+            exists: true,
+            ahead: 0,
+            commits: [],
+            overwritten: { files: [], total: 0 },
+            fellBackTo: null,
+          },
+        }
+        if (options.mergeOutcome === 'auth-failure') {
+          return {
+            ok: false as const,
+            stage: 'fetch' as const,
+            reason: 'auth' as const,
+            detail: 'fatal: Could not read from remote repository.',
+            snapshot: merged,
+          }
+        }
+        return {
+          ok: true as const,
+          snapshot: merged,
+          degraded:
+            options.mergeOutcome === 'degraded'
+              ? { reason: 'auth' as const, detail: 'fatal: Could not read from remote repository.' }
+              : null,
+        }
+      },
       'git.pullRequest': () => {
         calls.push('pullRequest')
         return { url: null, via: 'gh' as const }
@@ -249,14 +299,14 @@ function harness(options: { local?: boolean; snapshotOverride?: GitSnapshot } = 
   return { host, calls }
 }
 
-test('story 1/30: header, branch row, commit card and the two change groups', async () => {
+test('story 1/30: header, branch row, commit card and the changes card', async () => {
   const { host } = harness()
   const view = await mount(panel, { host, locale: 'zh-CN' })
-  assert.equal(view.find({ text: 'feat/git-panel' })?.text, 'feat/git-panel')
   const drawn = JSON.stringify(view.tree())
-  assert.match(drawn, /已暂存的更改/)
+  assert.match(drawn, /feat\/git-panel/)
   assert.match(drawn, /origin\/feat\/git-panel/)
   assert.match(drawn, /staged\.ts/)
+  assert.match(drawn, /已暂存 1/)
   assert.deepEqual(view.errors, [])
   await view.unmount()
 })
@@ -264,6 +314,7 @@ test('story 1/30: header, branch row, commit card and the two change groups', as
 test('story 8: commit button stays disabled until a message exists; the caret opens three more', async () => {
   const { host, calls } = harness()
   const view = await mount(panel, { host, locale: 'zh-CN' })
+  await view.select({ type: 'Tabs' }, 'commit')
   assert.equal(view.find({ role: 'button', text: '提交' })?.disabled, true)
   assert.match(JSON.stringify(view.tree()), /需要提交信息/)
   await view.type({ label: '提交信息' }, 'feat: 克隆布局')
@@ -295,8 +346,8 @@ test('story 6: a directory section offers folder-level actions', async () => {
   const { host, calls } = harness()
   const view = await mount(panel, { host, locale: 'zh-CN' })
   await view.press({ label: '暂存目录 src' })
-  await view.press({ label: '取消暂存目录 src' })
-  assert.deepEqual(calls.filter((call) => /Folder/.test(call)), ['stageFolder:src', 'unstageFolder:src'])
+  await view.press({ label: '丢弃目录 src' })
+  assert.deepEqual(calls.filter((call) => /Folder/.test(call)), ['stageFolder:src', 'discardFolder:src'])
   await view.unmount()
 })
 
@@ -309,17 +360,109 @@ test('story 10/11: a submodule row enters that repository', async () => {
   await view.unmount()
 })
 
-test('story 15-18: the stash view lists entries and can shelve the tree', async () => {
+test('v3: the header shows how far the base branch is ahead, and the overflow can pull it in', async () => {
   const { host, calls } = harness()
   const view = await mount(panel, { host, locale: 'zh-CN' })
-  await view.press({ label: '更多' })
-  await view.press({ role: 'button', text: '贮藏' })
+  assert.equal(view.find({ role: 'button', text: '基准领先 2 个提交' }) !== null, true)
+  await view.press({ role: 'button', text: '基准领先 2 个提交' })
+  const drawn = JSON.stringify(view.tree())
+  assert.match(drawn, /origin\/main/)
+  assert.match(drawn, /feat: base moved on/)
+  // 有未提交改动时不能合并，面板给出原因而不是静默失败。
+  assert.equal(view.find({ role: 'button', text: '获取并合并' })?.disabled, true)
+  assert.match(drawn, /先提交或贮藏改动/)
+  await view.unmount()
+
+  const clean = harness({
+    snapshotOverride: { ...snapshot, staged: [], modified: [], untracked: [] },
+  })
+  const cleanView = await mount(panel, { host: clean.host, locale: 'zh-CN' })
+  await cleanView.press({ role: 'button', text: '基准领先 2 个提交' })
+  await cleanView.press({ role: 'button', text: '获取并合并' })
+  assert.deepEqual(clean.calls.filter((call) => call.startsWith('mergeBase')), ['mergeBase:true'])
+  await cleanView.unmount()
+
+  // 只合并本地基准：不先 fetch，单独挂一次。
+  const localOnly = harness({
+    snapshotOverride: { ...snapshot, staged: [], modified: [], untracked: [] },
+  })
+  const localView = await mount(panel, { host: localOnly.host, locale: 'zh-CN' })
+  await localView.press({ role: 'button', text: '基准领先 2 个提交' })
+  await localView.press({ role: 'button', text: '仅合并本地基准' })
+  assert.deepEqual(localOnly.calls.filter((call) => call.startsWith('mergeBase')), ['mergeBase:false'])
+  await localView.unmount()
+})
+
+test('v3b: the base page lets you pick which branch is the base', async () => {
+  const { host, calls } = harness()
+  const view = await mount(panel, { host, locale: 'zh-CN' })
+  await view.select({ type: 'Tabs' }, 'base')
+  assert.equal(view.valueOf({ label: '基准分支' }), 'origin/main')
+  await view.select({ label: '基准分支' }, 'main')
+  assert.deepEqual(calls.filter((call) => call.startsWith('base:')), ['base:main'])
+  await view.unmount()
+})
+
+test('v5: a failed merge explains itself in place and can show the raw output', async () => {
+  const { host } = harness({
+    mergeOutcome: 'auth-failure',
+    snapshotOverride: { ...snapshot, staged: [], modified: [], untracked: [] },
+  })
+  const view = await mount(panel, { host, locale: 'zh-CN' })
+  await view.press({ role: 'button', text: '基准领先 2 个提交' })
+  await view.press({ role: 'button', text: '获取并合并' })
+  assert.match(JSON.stringify(view.tree()), /获取失败：没有访问权限/)
+  await view.press({ role: 'button', text: '查看原始输出' })
+  assert.match(JSON.stringify(view.tree()), /Could not read from remote repository/)
+  await view.press({ role: 'button', text: '收起原始输出' })
+  assert.equal(JSON.stringify(view.tree()).includes('Could not read from remote'), false)
+  await view.unmount()
+})
+
+test('v5: a degraded merge says it used the local base', async () => {
+  const { host } = harness({
+    mergeOutcome: 'degraded',
+    snapshotOverride: { ...snapshot, staged: [], modified: [], untracked: [] },
+  })
+  const view = await mount(panel, { host, locale: 'zh-CN' })
+  await view.press({ role: 'button', text: '基准领先 2 个提交' })
+  await view.press({ role: 'button', text: '获取并合并' })
+  assert.match(JSON.stringify(view.tree()), /已用本地缓存完成合并/)
+  await view.unmount()
+})
+
+test('v4.1: buildTree nests directories, sorts them, and keeps root files at the top', () => {
+  const tree = buildTree([
+    { path: 'src/utils/b.ts', status: 'modified', additions: 1, deletions: 0 },
+    { path: 'src/a.ts', status: 'modified', additions: 1, deletions: 0 },
+    { path: 'README.md', status: 'modified', additions: 1, deletions: 0 },
+  ])
+  assert.deepEqual(tree.dirs.map((dir) => dir.name), ['src'])
+  assert.deepEqual(tree.dirs[0].dirs.map((dir) => dir.name), ['utils'])
+  assert.deepEqual(tree.dirs[0].files.map((file) => file.path), ['src/a.ts'])
+  assert.deepEqual(tree.files.map((file) => file.path), ['README.md'])
+})
+
+test('v4.1: the changes page switches between tree and flat display', async () => {
+  const { host } = harness()
+  const view = await mount(panel, { host, locale: 'zh-CN' })
+  assert.equal(view.valueOf({ label: '展示方式' }), 'tree')
+  await view.select({ label: '展示方式' }, 'flat')
+  assert.equal(view.valueOf({ label: '展示方式' }), 'flat')
+  assert.match(JSON.stringify(view.tree()), /modified\.ts/)
+  await view.unmount()
+})
+
+test('story 15-18: the stash card lists entries and can shelve the tree', async () => {
+  const { host, calls } = harness()
+  const view = await mount(panel, { host, locale: 'zh-CN' })
+  await view.select({ type: 'Tabs' }, 'stash')
   assert.equal(view.find({ text: /WIP on main/ }) !== null, true)
   await view.press({ role: 'button', text: '新建贮藏' })
   await view.press({ role: 'button', text: '弹出' })
   assert.deepEqual(calls.filter((call) => /stash/.test(call)), ['stashSave', 'stashPop:0'])
-  await view.press({ role: 'button', text: '返回更改' })
-  assert.match(JSON.stringify(view.tree()), /已暂存的更改/)
+  await view.select({ type: 'Tabs' }, 'commit')
+  assert.match(JSON.stringify(view.tree()), /已暂存 1/)
   await view.unmount()
 })
 
@@ -403,14 +546,13 @@ test('v2b: the history view shows PR status, commits and per-commit files', asyn
   await view.press({ label: '搜索提交' })
   assert.equal(view.find({ text: /PR #42/ }) !== null, true)
   assert.match(JSON.stringify(view.tree()), /feat: third/)
-  assert.equal(view.find({ role: 'button', text: '历史' })?.disabled, true)
   await view.press({ label: '查看差异 1111111' })
   assert.deepEqual(calls.filter((call) => call.startsWith('commitFiles')), ['commitFiles:1111111'])
   await view.type({ label: '历史' }, 'main', { replace: true, submit: true })
   const logCalls = calls.filter((call) => call.startsWith('log'))
   assert.equal(logCalls[logCalls.length - 1], 'log:0:main')
-  await view.press({ role: 'button', text: '返回更改' })
-  assert.match(JSON.stringify(view.tree()), /已暂存的更改/)
+  await view.select({ type: 'Tabs' }, 'changes')
+  assert.match(JSON.stringify(view.tree()), /已暂存 1/)
   await view.unmount()
 })
 

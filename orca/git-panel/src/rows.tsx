@@ -23,7 +23,6 @@ import {
   openFile,
   selectRepo,
   selected,
-  showView,
   toggleDiff,
 } from './state'
 
@@ -62,8 +61,13 @@ function lineStat(file: FileChange): string {
   return parts.join(' ')
 }
 
-/** 文件行：字母列固定宽度，名字在上、目录在下，右侧行内动作。 */
-export function fileRow(file: FileChange, text: Copy, group: 'staged' | 'changes') {
+/** 文件行：字母 + 文件名（+ 可选目录副行）+ 行数 + 行内动作；没有展开 diff 时只有一行。 */
+export function fileRow(
+  file: FileChange,
+  text: Copy,
+  group: 'staged' | 'changes',
+  showDir = true
+) {
   const staged = group === 'staged'
   const untracked = file.status === 'untracked'
   const key = `${staged ? 's' : 'w'}:${file.path}`
@@ -73,8 +77,7 @@ export function fileRow(file: FileChange, text: Copy, group: 'staged' | 'changes
   const root = read(selected)
   const stat = lineStat(file)
 
-  return (
-    <Stack gap="xs">
+  const row = (
       <Row gap="xs" align="center">
         <Text size="xs" weight="semibold" tone={STATUS_TONE[file.status] ?? 'neutral'}>
           {STATUS_LETTER[file.status] ?? 'M'}
@@ -83,7 +86,7 @@ export function fileRow(file: FileChange, text: Copy, group: 'staged' | 'changes
           <Text size="sm" truncate>
             {name}
           </Text>
-          {dir ? (
+          {dir && showDir ? (
             <Text size="xs" muted truncate>
               {dir}
             </Text>
@@ -165,13 +168,17 @@ export function fileRow(file: FileChange, text: Copy, group: 'staged' | 'changes
           ) : null}
         </Row>
       </Row>
-      {open ? (
-        diff === undefined ? (
-          <Spinner label={text.loading} labelHidden />
-        ) : (
-          <CodeView code={diff} label={file.path} lineNumbers wrap={false} />
-        )
-      ) : null}
+  )
+
+  if (!open) return row
+  return (
+    <Stack gap="xs">
+      {row}
+      {diff === undefined ? (
+        <Spinner label={text.loading} labelHidden />
+      ) : (
+        <CodeView code={diff} label={file.path} lineNumbers wrap={false} />
+      )}
     </Stack>
   )
 }
@@ -206,34 +213,6 @@ export function submoduleRow(entry: SubmoduleEntry, text: Copy, root: string) {
           onPress={() => void selectRepo(`${root}/${entry.path}`)}
         />
       )}
-    </Row>
-  )
-}
-
-/** 二级页（历史 / 贮藏 / 更多 / 分支）顶部的返回条：回「更改」+ 平级跳转，当前页那项禁用。 */
-export function navRow(text: Copy, current: 'history' | 'stashes' | 'actions' | 'branches') {
-  const jump = (
-    target: 'history' | 'stashes' | 'actions' | 'branches',
-    label: string
-  ) => (
-    <Button
-      key={target}
-      size="xs"
-      variant="ghost"
-      disabled={target === current}
-      onPress={() => showView(target)}
-    >
-      {label}
-    </Button>
-  )
-  return (
-    <Row gap="xs" wrap>
-      <Button size="xs" variant="outline" onPress={() => showView('changes')}>
-        {text.backToChanges}
-      </Button>
-      {jump('history', text.tabHistory)}
-      {jump('stashes', text.stashes)}
-      {jump('branches', text.viewBranches)}
     </Row>
   )
 }

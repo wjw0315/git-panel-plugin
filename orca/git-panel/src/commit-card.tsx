@@ -1,7 +1,8 @@
-// 提交盒（对齐内置）：一个带边框的盒子，里面是信息框、提交主按钮 + 更多收尾、amend 开关。
-// 禁用时右侧给一行原因，不弹 toast、不改布局。非主仓库时主按钮写明往哪个仓库提交。
+// 提交页（顶部 tab「提交」）：信息框、amend、已暂存文件、提交按钮 + ▾。
+// 没有暂存也没有写信息时，页面顶部给一行提示，而不是整块空着。
 
-import { Box, Button, Checkbox, IconButton, read, Row, set, Stack, Text, Textarea } from 'orca'
+import { Button, Checkbox, IconButton, read, Row, set, Stack, Text, Textarea } from 'orca'
+import { fileRow } from './rows'
 import type { Copy } from './strings'
 import {
   amend,
@@ -9,12 +10,14 @@ import {
   commitMenuOpen,
   commitTarget,
   commitWith,
+  discardGroup,
   message,
   snapshot,
 } from './state'
 
 export function commitCard(text: Copy) {
   const snap = read(snapshot)
+  const staged = snap?.staged ?? []
   const block = commitBlockReason(text)
   const allowed = block === null
   const target = commitTarget(text)
@@ -22,69 +25,83 @@ export function commitCard(text: Copy) {
   const amendDisabled = snap === null || snap.operation !== null || snap.lastCommit === null
 
   return (
-    <Box border radius="md" padding="sm">
-      <Stack gap="xs">
-        <Textarea
-          label={text.message}
-          labelHidden
-          value={read(message)}
-          rows={3}
-          placeholder={text.message}
-          onChange={(value) => set(message, value)}
-        />
-
-        <Row justify="between" align="center" gap="xs">
-          <Row gap="xs" align="center">
-            <Button variant="solid" disabled={!allowed} onPress={() => commitWith('commit')}>
-              {label}
-            </Button>
-            <IconButton
-              icon="expand"
-              size="xs"
-              variant="ghost"
-              label={text.commitMenu}
-              onPress={() => set(commitMenuOpen, !read(commitMenuOpen))}
-            />
-          </Row>
-          {block ? (
-            <Text size="xs" muted>
-              {block}
-            </Text>
-          ) : null}
-        </Row>
-
-        {read(commitMenuOpen) ? (
-          <Stack gap="none">
-            <Button variant="ghost" size="sm" disabled={!allowed} onPress={() => commitWith('push')}>
-              {text.commitPush}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={!allowed || !snap?.hasUpstream}
-              onPress={() => commitWith('sync')}
-            >
-              {text.commitSync}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              tone="danger"
-              disabled={!allowed || !snap?.hasUpstream}
-              onPress={() => commitWith('force')}
-            >
-              {text.commitForce}
-            </Button>
-          </Stack>
+    <Stack gap="xs">
+      <Row justify="between" align="center">
+        <Text size="xs" muted>
+          {staged.length ? text.stagedCount(staged.length) : text.needStaged}
+        </Text>
+        {staged.length ? (
+          <IconButton
+            icon="delete"
+            size="xs"
+            variant="ghost"
+            tone="danger"
+            label={text.discardAll}
+            onPress={() => discardGroup('staged')}
+          />
         ) : null}
+      </Row>
 
-        <Checkbox
-          label={text.amend}
-          checked={read(amend)}
-          disabled={amendDisabled}
-          onChange={(checked) => set(amend, checked)}
+      <Textarea
+        label={text.message}
+        labelHidden
+        value={read(message)}
+        rows={3}
+        placeholder={read(amend) ? text.amend : text.message}
+        onChange={(value) => set(message, value)}
+      />
+
+      <Checkbox
+        label={text.amend}
+        checked={read(amend)}
+        disabled={amendDisabled}
+        onChange={(checked) => set(amend, checked)}
+      />
+
+      {staged.map((file) => fileRow(file, text, 'staged'))}
+
+      <Row gap="xs" align="center">
+        <Button variant="solid" disabled={!allowed} onPress={() => commitWith('commit')}>
+          {label}
+        </Button>
+        <IconButton
+          icon="expand"
+          size="xs"
+          variant="ghost"
+          label={text.commitMenu}
+          onPress={() => set(commitMenuOpen, !read(commitMenuOpen))}
         />
-      </Stack>
-    </Box>
+        {block ? (
+          <Text size="xs" muted>
+            {block}
+          </Text>
+        ) : null}
+      </Row>
+
+      {read(commitMenuOpen) ? (
+        <Stack gap="none">
+          <Button variant="ghost" size="sm" disabled={!allowed} onPress={() => commitWith('push')}>
+            {text.commitPush}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!allowed || !snap?.hasUpstream}
+            onPress={() => commitWith('sync')}
+          >
+            {text.commitSync}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            tone="danger"
+            disabled={!allowed || !snap?.hasUpstream}
+            onPress={() => commitWith('force')}
+          >
+            {text.commitForce}
+          </Button>
+        </Stack>
+      ) : null}
+    </Stack>
   )
 }

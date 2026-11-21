@@ -2,7 +2,14 @@
 // 拆分原因：Orca 桌面端给每个面板文件 2000ms 转译预算，单文件 900+ 行会超。
 
 import { atom, plugin, read, set, shell, host } from 'orca'
-import type { FileChange, GitSnapshot, RepoSummary, StashEntry } from './protocol'
+import type {
+  FileChange,
+  GitSnapshot,
+  MergeReason,
+  MergeStage,
+  RepoSummary,
+  StashEntry,
+} from './protocol'
 import { copy, type Copy } from './strings'
 
 export const repos = atom<RepoSummary[]>([])
@@ -14,7 +21,6 @@ export const message = atom('message', '')
 export const amend = atom(false)
 export const includeUntracked = atom(false)
 export const forceConfirm = atom(false)
-export const tab = atom('tab', 'changes', { persist: 'plugin' })
 export const busy = atom(false)
 export const error = atom<string | null>(null)
 /** 当前展开的行内差异：`s:path`（已暂存）/ `w:path`（工作区）。 */
@@ -50,7 +56,8 @@ export async function loadStashes(): Promise<void> {
 export async function loadSnapshot(fresh: boolean): Promise<void> {
   const root = read(selected)
   if (!root) return
-  set(snapshot, await plugin.request('git.snapshot', { repoRoot: root, fresh }))
+  const base = baseRefFor(root)
+  applySnapshot(await plugin.request('git.snapshot', { repoRoot: root, fresh, ...(base ? { base } : {}) }))
 }
 
 export async function loadWorkspace(): Promise<void> {
@@ -97,7 +104,7 @@ export async function selectRepo(root: string): Promise<void> {
 
 export async function applyRequest(request: Promise<GitSnapshot>): Promise<void> {
   await guard(async () => {
-    set(snapshot, await request)
+    applySnapshot(await request)
   })
 }
 
@@ -137,7 +144,7 @@ export function commitWith(kind: 'commit' | 'push' | 'sync' | 'force'): void {
       message: read(message),
       amend: read(amend),
     })
-    set(snapshot, next)
+    applySnapshot(next)
     set(amend, false)
     set(message, '')
     await loadStashes()
@@ -195,7 +202,7 @@ export function newStash(): void {
       message: read(message),
       includeUntracked: read(includeUntracked),
     })
-    set(snapshot, next)
+    applySnapshot(next)
     set(message, '')
     await loadStashes()
   })
@@ -285,6 +292,34 @@ export function stageGroup(scope: 'changes'): void {
 
 export function unstageGroup(): void {
   void applyRequest(plugin.request('git.unstageAll', { repoRoot: read(selected) }))
+}
+
+/** 基准页的失败/降级提示与「原始输出」开合。 */
+export type BaseFailure = { stage: MergeStage; reason: MergeReason; detail: string }
+export const baseFailure = atom<BaseFailure | null>(null)
+export const baseDegraded = atom<MergeReason | null>(null)
+export const baseDetailOpen = atom(false)
+
+/** 拉取基准分支。`fetchFirst=false` 表示只合并本地已有的 remote-tracking ref。 */
+export function pullBase(fetchFirst: boolean): void {
+  const root = read(selected)
+  const base = baseRefFor(root)
+  set(baseFailure, null)
+  set(baseDegraded, null)
+  set(baseDetailOpen, false)
+  void guard(async () => {
+    const outcome = await plugin.request('git.mergeBase', {
+      repoRoot: root,
+      ...(base ? { base } : {}),
+      fetch: fetchFirst,
+    })
+    applySnapshot(outcome.snapshot)
+    if (!outcome.ok) {
+      set(baseFailure, { stage: outcome.stage, reason: outcome.reason, detail: outcome.detail })
+      return
+    }
+    if (outcome.degraded) set(baseDegraded, outcome.degraded.reason)
+  })
 }
 
 /** 面板各处共用的派生态，集中算一次。 */
@@ -394,7 +429,7 @@ export function switchBranch(name: string, track: boolean): void {
       name,
       track,
     })
-    set(snapshot, next)
+    applySnapshot(next)
     await refreshAfterBranchChange()
   })
 }
@@ -406,7 +441,7 @@ export function createBranch(): void {
   set(branchCreating, false)
   void guard(async () => {
     const next = await plugin.request('git.branchCreate', { repoRoot: read(selected), name })
-    set(snapshot, next)
+    applySnapshot(next)
     await refreshAfterBranchChange()
   })
 }
@@ -419,23 +454,66 @@ export function deleteBranch(name: string, force: boolean): void {
       name,
       force,
     })
-    set(snapshot, next)
+    applySnapshot(next)
     await loadBranches()
   })
 }
 
-// ---- 视图切换与文件树（对齐内置：单主体「更改」树 + 溢出入口） ----
+// ---- 顶部页签（v4.1：卡片列表改成顶部 tab 切换，一次只显示一页内容） ----
 
-export type PanelView = 'changes' | 'history' | 'stashes' | 'actions' | 'branches'
-export const view = atom<PanelView>('view', 'changes', { persist: 'plugin' })
+export type TabId = 'commit' | 'changes' | 'base' | 'history' | 'stash' | 'branch' | 'remote'
+
+/** 更改页的文件展示方式：树形（逐层目录）或平铺（一列）。 */
+export type FileView = 'tree' | 'flat'
+export const fileView = atom<FileView>('fileView', 'tree', { persist: 'plugin' })
+/** 每个仓库自己选的基准分支（ref 形如 origin/main 或本地分支名）；没选过就用远端默认。 */
+export const baseRefs = atom<Record<string, string>>('baseRefs', {}, { persist: 'plugin' })
+
+/** 统一入口：写快照的同时处理「基准 ref 回退」，避免面板记住一个已不存在的选择。 */
+export function applySnapshot(next: GitSnapshot | null): void {
+  set(snapshot, next)
+  if (!next || !next.base?.fellBackTo) return
+  const stored = read(baseRefs)[next.repoRoot]
+  if (stored && stored !== next.base.ref) {
+    set(baseRefs, { ...read(baseRefs), [next.repoRoot]: '' })
+  }
+}
+
+export function baseRefFor(root: string): string | undefined {
+  const ref = read(baseRefs)[root]
+  return ref && ref.length ? ref : undefined
+}
+
+/** 换基准分支：记住选择并重拉快照（基准领先数、提交清单都跟着变）。 */
+export function setBaseRef(ref: string): void {
+  const root = read(selected)
+  if (!root) return
+  set(baseRefs, { ...read(baseRefs), [root]: ref })
+  set(baseFailure, null)
+  set(baseDegraded, null)
+  void guard(async () => {
+    applySnapshot(await plugin.request('git.snapshot', { repoRoot: root, fresh: true, ...(ref ? { base: ref } : {}) }))
+  })
+}
+/** 树形视图里展开的目录路径；一级目录默认展开。 */
+export const openDirs = atom<Record<string, boolean>>('openDirs', {}, { persist: 'plugin' })
+
+export function dirOpen(path: string, fallback: boolean): boolean {
+  const saved = read(openDirs)[path]
+  return saved === undefined ? fallback : saved
+}
+
+export function toggleDir(path: string, fallback: boolean): void {
+  set(openDirs, { ...read(openDirs), [path]: !dirOpen(path, fallback) })
+}
+export const activeTab = atom<TabId>('tab', 'changes', { persist: 'plugin' })
 export const commitMenuOpen = atom(false)
 
-export function showView(next: PanelView): void {
-  set(view, next)
-  set(commitMenuOpen, false)
-  if (next === 'history') {
+export function selectTab(id: TabId): void {
+  set(activeTab, id)
+  if (id === 'history') {
     void loadHistory(true)
     void loadPullRequestStatus()
   }
-  if (next === 'branches') void loadBranches()
+  if (id === 'branch' || id === 'base') void loadBranches()
 }

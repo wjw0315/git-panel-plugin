@@ -27,7 +27,6 @@ import {
   prStatus,
   toggleCommitFiles,
 } from './state'
-import { navRow } from './rows'
 
 export function historyTab(text: Copy) {
   const commits = read(historyCommits)
@@ -36,7 +35,6 @@ export function historyTab(text: Copy) {
 
   return (
     <Stack gap="sm">
-      {navRow(text, 'history')}
       <Row justify="between" align="center">
         <Badge tone={status ? 'accent' : 'neutral'}>
           {status ? text.prState(status.state, status.number) : text.prNone}

@@ -1,164 +1,159 @@
-// 变更区（对齐内置）：已暂存的更改 / 更改 两组，组头右侧是批量动作。
-// 文件按一级目录折叠成小节，目录头放目录级批量；根目录文件直接列出。
-// 组只在有内容时出现；全空时显示空态，不留标题。
+// 更改页（顶部 tab「更改」）：顶部一行是文件数 + 展示方式 + 全部暂存/全部丢弃。
+// 两种展示方式：树形（逐层目录，可折叠，目录行带目录级动作）与平铺（一列文件，路径写在副行）。
 
-import {
-  Collapsible,
-  EmptyState,
-  IconButton,
-  plugin,
-  read,
-  Row,
-  Stack,
-  Text,
-  type OrcaNode,
-} from 'orca'
+import { Box, Collapsible, IconButton, plugin, read, Row, Select, set, Stack, Text, type OrcaNode } from 'orca'
 import type { FileChange, GitSnapshot } from './protocol'
 import type { Copy } from './strings'
 import { fileRow, submoduleRow } from './rows'
 import {
   applyRequest,
+  dirOpen,
   discardGroup,
+  fileView,
   selected,
   stageGroup,
-  unstageGroup,
+  toggleDir,
+  type FileView,
 } from './state'
 
-function groupHeader(title: string, count: number, actions: OrcaNode) {
-  return (
-    <Row justify="between" align="center">
-      <Row gap="xs" align="center">
-        <Text size="sm" weight="medium">
-          {title}
-        </Text>
-        <Text size="xs" muted>
-          {count}
-        </Text>
-      </Row>
-      <Row gap="none" align="center">
-        {actions}
-      </Row>
-    </Row>
-  )
+type DirNode = {
+  name: string
+  path: string
+  dirs: DirNode[]
+  files: FileChange[]
 }
 
-/** 目录小节：标题是目录名，右侧三个目录级动作。 */
-function folderSection(dir: string, files: FileChange[], text: Copy, group: 'staged' | 'changes') {
-  const root = read(selected)
-  const staged = group === 'staged'
-  return (
-    <Collapsible key={dir} title={dir} description={text.filesCount(files.length)} defaultOpen>
-      <Stack gap="xs">
-        <Row justify="end" gap="none" align="center">
-          {staged ? (
-            <IconButton
-              icon="remove"
-              size="xs"
-              variant="ghost"
-              label={`${text.folderUnstage} ${dir}`}
-              onPress={() =>
-                void applyRequest(plugin.request('git.unstageFolder', { repoRoot: root, prefix: dir }))
-              }
-            />
-          ) : (
-            <>
-              <IconButton
-                icon="add"
-                size="xs"
-                variant="ghost"
-                label={`${text.folderStage} ${dir}`}
-                onPress={() =>
-                  void applyRequest(plugin.request('git.stageFolder', { repoRoot: root, prefix: dir }))
-                }
-              />
-              <IconButton
-                icon="delete"
-                size="xs"
-                variant="ghost"
-                tone="danger"
-                label={`${text.folderDiscard} ${dir}`}
-                onPress={() =>
-                  void applyRequest(
-                    plugin.request('git.discardFolder', { repoRoot: root, prefix: dir })
-                  )
-                }
-              />
-            </>
-          )}
-        </Row>
-        <Stack gap="none">{files.map((file) => fileRow(file, text, group))}</Stack>
-      </Stack>
-    </Collapsible>
-  )
-}
-
-/** 一组文件：目录折叠 + 根目录散文件，顺序与内置一致（先目录，后文件）。 */
-function fileList(files: FileChange[], text: Copy, group: 'staged' | 'changes') {
-  const folders = new Map<string, FileChange[]>()
-  const loose: FileChange[] = []
+/** 把路径折叠成真正的树（多层），排序按名字。 */
+export function buildTree(files: FileChange[]): DirNode {
+  const root: DirNode = { name: '', path: '', dirs: [], files: [] }
   for (const file of files) {
-    const slash = file.path.indexOf('/')
-    if (slash < 0) {
-      loose.push(file)
-      continue
+    const segments = file.path.split('/')
+    const name = segments.pop() ?? file.path
+    let level = root
+    let path = ''
+    for (const segment of segments) {
+      path = path ? `${path}/${segment}` : segment
+      let next = level.dirs.find((dir) => dir.name === segment)
+      if (!next) {
+        next = { name: segment, path, dirs: [], files: [] }
+        level.dirs.push(next)
+      }
+      level = next
     }
-    const dir = file.path.slice(0, slash)
-    const bucket = folders.get(dir) ?? []
-    bucket.push(file)
-    folders.set(dir, bucket)
+    level.files.push({ ...file, path: file.path })
+    void name
   }
-  const nodes: OrcaNode[] = []
-  for (const [dir, entries] of folders) nodes.push(folderSection(dir, entries, text, group))
-  if (loose.length)
-    nodes.push(
-      <Stack key={`loose:${group}`} gap="none">
-        {loose.map((file) => fileRow(file, text, group))}
-      </Stack>
-    )
-  return <Stack gap="xs">{nodes}</Stack>
+  const sort = (node: DirNode) => {
+    node.dirs.sort((a, b) => a.name.localeCompare(b.name))
+    node.files.sort((a, b) => a.path.localeCompare(b.path))
+    node.dirs.forEach(sort)
+  }
+  sort(root)
+  return root
+}
+
+function countFiles(node: DirNode): number {
+  return node.files.length + node.dirs.reduce((sum, dir) => sum + countFiles(dir), 0)
+}
+
+/** 目录行：一行内完成「展开 + 名字 + 数量 + 目录级动作」，下面是缩进过的子项。 */
+function dirRow(node: DirNode, text: Copy, depth: number): OrcaNode {
+  const root = read(selected)
+  const fallback = depth === 0
+  const open = dirOpen(node.path, fallback)
+
+  return (
+    <Stack key={node.path} gap="none">
+      <Row justify="between" align="center">
+        <Row gap="xs" align="center">
+          <IconButton
+            icon={open ? 'collapse' : 'expand'}
+            size="xs"
+            variant="ghost"
+            label={`${open ? text.collapseCard : text.expandCard} ${node.name}`}
+            onPress={() => toggleDir(node.path, fallback)}
+          />
+          <Text size="sm" weight="medium" truncate>
+            {node.name}
+          </Text>
+          <Text size="xs" muted>
+            {countFiles(node)}
+          </Text>
+        </Row>
+        <Row gap="none" align="center">
+          <IconButton
+            icon="add"
+            size="xs"
+            variant="ghost"
+            label={`${text.folderStage} ${node.path}`}
+            onPress={() =>
+              void applyRequest(
+                plugin.request('git.stageFolder', { repoRoot: root, prefix: node.path })
+              )
+            }
+          />
+          <IconButton
+            icon="delete"
+            size="xs"
+            variant="ghost"
+            tone="danger"
+            label={`${text.folderDiscard} ${node.path}`}
+            onPress={() =>
+              void applyRequest(
+                plugin.request('git.discardFolder', { repoRoot: root, prefix: node.path })
+              )
+            }
+          />
+        </Row>
+      </Row>
+      {open ? (
+        <Box paddingX="sm">
+          <Stack gap="none">
+            {node.dirs.map((dir) => dirRow(dir, text, depth + 1))}
+            {node.files.map((file) => fileRow(file, text, 'changes', false))}
+          </Stack>
+        </Box>
+      ) : null}
+    </Stack>
+  )
+}
+
+/** 树形：多层目录；根目录的文件直接列出来。 */
+function treeView(files: FileChange[], text: Copy) {
+  const tree = buildTree(files)
+  return (
+    <Stack gap="xs">
+      {tree.dirs.map((dir) => dirRow(dir, text, 0))}
+      {tree.files.map((file) => fileRow(file, text, 'changes'))}
+    </Stack>
+  )
 }
 
 export function changesTree(text: Copy, snap: GitSnapshot) {
-  const staged = snap.staged
   const changes = [...snap.modified, ...snap.untracked]
-  if (staged.length === 0 && changes.length === 0 && snap.submodules.length === 0) {
-    return <EmptyState title={text.clean} description={text.cleanHint} icon="check" />
-  }
+  const empty = changes.length === 0 && snap.submodules.length === 0
+  const mode = read(fileView) as FileView
 
   return (
-    <Stack gap="sm">
-      {staged.length ? (
-        <Stack gap="xs">
-          {groupHeader(
-            text.stagedGroup,
-            staged.length,
-            <>
-              <IconButton
-                icon="remove"
-                size="xs"
-                variant="ghost"
-                label={text.unstageAll}
-                onPress={unstageGroup}
-              />
-              <IconButton
-                icon="delete"
-                size="xs"
-                variant="ghost"
-                tone="danger"
-                label={text.discardAll}
-                onPress={() => discardGroup('staged')}
-              />
-            </>
-          )}
-          {fileList(staged, text, 'staged')}
-        </Stack>
-      ) : null}
-
-      {changes.length || snap.submodules.length ? (
-        <Stack gap="xs">
-          {groupHeader(
-            text.changesGroup,
-            changes.length,
+    <Stack gap="xs">
+      <Row justify="between" align="center" gap="xs">
+        <Text size="xs" muted>
+          {empty ? text.cleanHint : text.filesCount(changes.length)}
+        </Text>
+        <Row gap="xs" align="center">
+          {changes.length ? (
+            <Select
+              label={text.fileView}
+              labelHidden
+              value={mode}
+              options={[
+                { value: 'tree', label: text.viewTree },
+                { value: 'flat', label: text.viewFlat },
+              ]}
+              onChange={(value) => set(fileView, value as FileView)}
+            />
+          ) : null}
+          {changes.length ? (
             <>
               <IconButton
                 icon="add"
@@ -176,15 +171,26 @@ export function changesTree(text: Copy, snap: GitSnapshot) {
                 onPress={() => discardGroup('changes')}
               />
             </>
-          )}
-          {changes.length ? fileList(changes, text, 'changes') : null}
+          ) : null}
+        </Row>
+      </Row>
+
+      {empty ? null : (
+        <>
+          {changes.length ? (
+            mode === 'flat' ? (
+              <Stack gap="none">{changes.map((file) => fileRow(file, text, 'changes'))}</Stack>
+            ) : (
+              treeView(changes, text)
+            )
+          ) : null}
           {snap.submodules.map((entry) => (
             <Stack key={`sub:${entry.path}`} gap="none">
               {submoduleRow(entry, text, read(selected) || snap.repoRoot)}
             </Stack>
           ))}
-        </Stack>
-      ) : null}
+        </>
+      )}
     </Stack>
   )
 }

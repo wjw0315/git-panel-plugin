@@ -34,6 +34,56 @@ export type RemoteInfo = {
   baseBranch: string | null
 }
 
+/** 基准分支状态：当前分支离「要合入的目标」还差几个提交。 */
+export type BaseStatus = {
+  /** `origin/main` 这样的远端跟踪引用。 */
+  ref: string
+  /** 本地是否有这个远端跟踪分支（没 fetch 过就是 false）。 */
+  exists: boolean
+  /** 基准分支有、当前分支没有的提交数。 */
+  ahead: number
+  /** 上面那些提交的前几条（sha 短号 + 标题）。 */
+  commits: { sha: string; subject: string }[]
+  /** 合入会覆盖的本地未跟踪文件（最多列 10 个，另给总数）；有值时不允许合并。 */
+  overwritten: { files: string[]; total: number }
+  /** 选中的 ref 已不存在时的回退目标（回退后 ref 就是它）。 */
+  fellBackTo: string | null
+}
+
+/** 拉取基准分支的结果：失败也要带回快照，好让冲突条/领先数照常刷新。 */
+export type MergeStage = 'fetch' | 'merge'
+export type MergeReason =
+  | 'auth'
+  | 'network'
+  | 'ref-missing'
+  | 'untracked-overwrite'
+  | 'identity'
+  | 'conflict'
+  | 'other'
+
+export type MergeBaseInput = {
+  repoRoot: string
+  /** 选中的基准 ref；缺省用远端默认分支。 */
+  base?: string
+  /** 合并前是否先 fetch；`false` 表示只合并本地已有的 remote-tracking ref。 */
+  fetch?: boolean
+}
+
+export type MergeBaseOutcome =
+  | {
+      ok: true
+      snapshot: GitSnapshot
+      /** fetch 失败但本地有 ref，已用本地基准完成合并。 */
+      degraded: { reason: MergeReason; detail: string } | null
+    }
+  | {
+      ok: false
+      stage: MergeStage
+      reason: MergeReason
+      detail: string
+      snapshot: GitSnapshot
+    }
+
 export type GitSnapshot = {
   repoRoot: string
   branch: string | null
@@ -43,6 +93,8 @@ export type GitSnapshot = {
   hasUpstream: boolean
   upstream: string | null
   remote: RemoteInfo
+  /** 基准分支（远端默认分支）状态；没有远端或用不到时为 null。 */
+  base: BaseStatus | null
   operation: GitOperation | null
   /** 未解决冲突的文件（porcelain v2 的 u 行）。 */
   conflicts: string[]
@@ -95,7 +147,7 @@ export type StashEntry = {
 
 export type GitStashes = { stashes: StashEntry[] }
 
-export type RepoInput = { repoRoot: string; fresh?: boolean }
+export type RepoInput = { repoRoot: string; fresh?: boolean; /** 选中的基准分支引用；缺省用远端默认分支。 */ base?: string }
 export type PathsInput = { repoRoot: string; paths: string[] }
 export type FolderInput = { repoRoot: string; prefix: string }
 export type FileDiffInput = { repoRoot: string; path: string; staged: boolean }
@@ -142,6 +194,7 @@ declare module 'orca' {
     'git.pushForce': { input: RepoInput; output: GitSnapshot }
     'git.publish': { input: RepoInput; output: GitSnapshot }
     'git.rebase': { input: RepoInput; output: GitSnapshot }
+    'git.mergeBase': { input: MergeBaseInput; output: MergeBaseOutcome }
     'git.pullRequest': { input: RepoInput; output: PullRequestResult }
     'git.pushThenPullRequest': { input: RepoInput; output: PullRequestResult }
     'git.abortOperation': { input: RepoInput; output: GitSnapshot }

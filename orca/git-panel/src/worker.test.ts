@@ -427,6 +427,169 @@ test('story 37/38: sync commits and lands both sides; rebase refuses a dirty tre
   rmSync(base, { recursive: true, force: true })
 })
 
+test('v3: the base branch lists commits the current branch lacks, and can be pulled in', async () => {
+  const { base, bare, work } = await remoteFixture()
+  const worker = await workerAt(work)
+  await runGit(work, ['branch', '-M', 'main'])
+  await write(work, 'a.txt', 'one\n')
+  await worker.request('git.stageAll', { repoRoot: work })
+  await worker.request('git.commit', { repoRoot: work, message: 'first', amend: false })
+  await worker.request('git.publish', { repoRoot: work })
+  await runGit(work, ['remote', 'set-head', 'origin', '-a'])
+
+  const other = join(base, 'other-base')
+  await runGit(base, ['clone', '-q', '-b', 'main', bare, other])
+  await runGit(other, ['config', 'user.email', 'other@example.com'])
+  await runGit(other, ['config', 'user.name', 'Other'])
+  writeFileSync(join(other, 'b.txt'), 'two\n')
+  await runGit(other, ['add', '-A'])
+  await runGit(other, ['commit', '-q', '-m', 'base moved on', '--no-gpg-sign'])
+  await runGit(other, ['push', '-q', 'origin', 'HEAD'])
+
+  const fetched = await worker.request('git.fetch', { repoRoot: work })
+  assert.match(fetched.base?.ref ?? '', /^origin\/(main|master)$/)
+  assert.equal(fetched.base?.ahead, 1, JSON.stringify(fetched.base))
+  assert.equal(fetched.base?.commits[0]?.subject, 'base moved on')
+
+  const merged = await worker.request('git.mergeBase', { repoRoot: work })
+  assert.equal(merged.ok, true)
+  assert.equal(merged.ok ? merged.snapshot.base?.ahead : -1, 0)
+  // 本分支没有额外提交，合并按快进处理，HEAD 直接指向基准的那条提交。
+  assert.equal(merged.ok ? merged.snapshot.lastCommit?.subject : '', 'base moved on')
+
+  await worker.deactivate()
+  rmSync(base, { recursive: true, force: true })
+})
+
+test('v5: fetch failure degrades to the local base instead of failing the merge', async () => {
+  const { base, bare, work } = await remoteFixture()
+  const worker = await workerAt(work)
+  await runGit(work, ['branch', '-M', 'main'])
+  await write(work, 'a.txt', 'one\n')
+  await worker.request('git.stageAll', { repoRoot: work })
+  await worker.request('git.commit', { repoRoot: work, message: 'first', amend: false })
+  await worker.request('git.publish', { repoRoot: work })
+  await runGit(work, ['remote', 'set-head', 'origin', '-a'])
+
+  const other = join(base, 'other-degraded')
+  await runGit(base, ['clone', '-q', '-b', 'main', bare, other])
+  await runGit(other, ['config', 'user.email', 'other@example.com'])
+  await runGit(other, ['config', 'user.name', 'Other'])
+  writeFileSync(join(other, 'b.txt'), 'two\n')
+  await runGit(other, ['add', '-A'])
+  await runGit(other, ['commit', '-q', '-m', 'base moved on', '--no-gpg-sign'])
+  await runGit(other, ['push', '-q', 'origin', 'HEAD'])
+  await worker.request('git.fetch', { repoRoot: work })
+
+  // 远端变得不可达：本地 origin/main 还在，合并要照样能完成。
+  await runGit(work, ['remote', 'set-url', 'origin', join(base, 'gone.git')])
+  const outcome = await worker.request('git.mergeBase', { repoRoot: work })
+  assert.equal(outcome.ok, true, JSON.stringify(outcome))
+  if (outcome.ok) {
+    assert.notEqual(outcome.degraded, null)
+    assert.equal(outcome.snapshot.lastCommit?.subject, 'base moved on')
+  }
+
+  await worker.deactivate()
+  rmSync(base, { recursive: true, force: true })
+})
+
+test('v5: mergeBase reports structured failures for fetch and merge steps', async () => {
+  const { base, work } = await remoteFixture()
+  const worker = await workerAt(work)
+  await write(work, 'a.txt', 'one\n')
+  await worker.request('git.stageAll', { repoRoot: work })
+  await worker.request('git.commit', { repoRoot: work, message: 'first', amend: false })
+
+  // 远端不可达且本地没有这个 ref → fetch 阶段失败。
+  await runGit(work, ['remote', 'set-url', 'origin', join(base, 'gone.git')])
+  const fetchFailure = await worker.request('git.mergeBase', {
+    repoRoot: work,
+    base: 'origin/nope',
+    fetch: true,
+  })
+  assert.equal(fetchFailure.ok, false)
+  if (!fetchFailure.ok) {
+    assert.equal(fetchFailure.stage, 'fetch')
+    assert.equal(fetchFailure.reason, 'auth')
+    assert.match(fetchFailure.detail, /access rights|repository/i)
+  }
+
+  // 跳过 fetch，直接合并一个不存在的 ref → merge 阶段失败。
+  const mergeFailure = await worker.request('git.mergeBase', {
+    repoRoot: work,
+    base: 'origin/nope',
+    fetch: false,
+  })
+  assert.equal(mergeFailure.ok, false)
+  if (!mergeFailure.ok) {
+    assert.equal(mergeFailure.stage, 'merge')
+    assert.equal(mergeFailure.reason, 'ref-missing')
+  }
+
+  await worker.deactivate()
+  rmSync(base, { recursive: true, force: true })
+})
+
+test('v5: an incoming base file that collides with an untracked file blocks the merge', async () => {
+  const { base, bare, work } = await remoteFixture()
+  const worker = await workerAt(work)
+  await runGit(work, ['branch', '-M', 'main'])
+  await write(work, 'a.txt', 'one\n')
+  await worker.request('git.stageAll', { repoRoot: work })
+  await worker.request('git.commit', { repoRoot: work, message: 'first', amend: false })
+  await worker.request('git.publish', { repoRoot: work })
+  await runGit(work, ['remote', 'set-head', 'origin', '-a'])
+
+  const other = join(base, 'other-collide')
+  await runGit(base, ['clone', '-q', '-b', 'main', bare, other])
+  await runGit(other, ['config', 'user.email', 'other@example.com'])
+  await runGit(other, ['config', 'user.name', 'Other'])
+  writeFileSync(join(other, 'clash.txt'), 'from base\n')
+  await runGit(other, ['add', '-A'])
+  await runGit(other, ['commit', '-q', '-m', 'base adds clash.txt', '--no-gpg-sign'])
+  await runGit(other, ['push', '-q', 'origin', 'HEAD'])
+
+  // 本地放一个同名的未跟踪文件。
+  writeFileSync(join(work, 'clash.txt'), 'local\n')
+  const fetched = await worker.request('git.fetch', { repoRoot: work })
+  assert.equal(fetched.base?.overwritten.total, 1, JSON.stringify(fetched.base))
+  assert.deepEqual(fetched.base?.overwritten.files, ['clash.txt'])
+
+  const head = await runGit(work, ['rev-parse', 'HEAD'])
+  const blocked = await worker.request('git.mergeBase', { repoRoot: work, fetch: false })
+  assert.equal(blocked.ok, false)
+  if (!blocked.ok) assert.equal(blocked.reason, 'untracked-overwrite')
+  // 没有真的合：HEAD 不动。
+  assert.equal((await runGit(work, ['rev-parse', 'HEAD'])).stdout.trim(), head.stdout.trim())
+
+  // 移走未跟踪文件后可以合并。
+  rmSync(join(work, 'clash.txt'))
+  const merged = await worker.request('git.mergeBase', { repoRoot: work, fetch: false })
+  assert.equal(merged.ok, true, JSON.stringify(merged))
+
+  await worker.deactivate()
+  rmSync(base, { recursive: true, force: true })
+})
+
+test('v5: a base ref that no longer exists falls back to the remote default', async () => {
+  const { base, bare, work } = await remoteFixture()
+  const worker = await workerAt(work)
+  await runGit(work, ['branch', '-M', 'main'])
+  await write(work, 'a.txt', 'one\n')
+  await worker.request('git.stageAll', { repoRoot: work })
+  await worker.request('git.commit', { repoRoot: work, message: 'first', amend: false })
+  await worker.request('git.publish', { repoRoot: work })
+  await runGit(work, ['remote', 'set-head', 'origin', '-a'])
+
+  const snap = await worker.request('git.snapshot', { repoRoot: work, base: 'origin/gone' })
+  assert.equal(snap.base?.ref, 'origin/main')
+  assert.equal(snap.base?.fellBackTo, 'origin/main')
+
+  await worker.deactivate()
+  rmSync(base, { recursive: true, force: true })
+})
+
 test('story 39: creating a PR needs a provider link or gh/glab', async () => {
   const { base, work } = await remoteFixture()
   const worker = await workerAt(work)

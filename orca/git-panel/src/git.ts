@@ -5,6 +5,8 @@ import { execFile } from 'node:child_process'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import type {
+  BaseStatus,
+  MergeBaseOutcome,
   BranchList,
   CommitFile,
   FileChange,
@@ -18,6 +20,7 @@ import type {
   SubmoduleEntry,
   StashEntry,
 } from './protocol'
+import { classifyFailure } from './git-failure'
 
 const DEFAULT_TIMEOUT_MS = 10_000
 const MAX_BUFFER = 4 * 1024 * 1024
@@ -312,7 +315,61 @@ export async function listSubmodules(repoRoot: string): Promise<SubmoduleEntry[]
   return entries
 }
 
-async function buildSnapshot(repoRoot: string): Promise<GitSnapshot> {
+/** 合入 ref 时会覆盖的本地未跟踪文件：git 只拒绝「未跟踪且 incoming 也有」的路径。 */
+async function readOverwritten(
+  repoRoot: string,
+  ref: string,
+  untracked: string[]
+): Promise<{ files: string[]; total: number }> {
+  if (!untracked.length) return { files: [], total: 0 }
+  const diff = await runGit(repoRoot, ['diff', '--name-only', '-z', `HEAD..${ref}`])
+  if (diff.code !== 0) return { files: [], total: 0 }
+  const incoming = new Set(diff.stdout.split('\u0000').filter(Boolean))
+  const hit = untracked.filter((path) => incoming.has(path))
+  return { files: hit.slice(0, 10), total: hit.length }
+}
+
+async function readBase(
+  repoRoot: string,
+  remote: RemoteInfo,
+  untracked: string[],
+  override?: string
+): Promise<BaseStatus | null> {
+  const fallback = remote.name && remote.baseBranch ? `${remote.name}/${remote.baseBranch}` : null
+  let ref = override ?? fallback
+  if (!ref) return null
+
+  let fellBackTo: string | null = null
+  let exists = (await runGit(repoRoot, ['rev-parse', '--verify', '--quiet', ref])).code === 0
+  // 选中的 ref 没了（远端删分支 / 从没 fetch 过）：回退到远端默认，并明确告诉面板。
+  if (!exists && override && fallback && override !== fallback) {
+    if ((await runGit(repoRoot, ['rev-parse', '--verify', '--quiet', fallback])).code === 0) {
+      ref = fallback
+      exists = true
+      fellBackTo = fallback
+    }
+  }
+
+  const empty = { files: [], total: 0 }
+  if (!exists) return { ref, exists: false, ahead: 0, commits: [], overwritten: empty, fellBackTo }
+
+  const count = await runGit(repoRoot, ['rev-list', '--count', `HEAD..${ref}`])
+  const ahead = count.code === 0 ? Number(count.stdout.trim()) || 0 : 0
+  const overwritten = await readOverwritten(repoRoot, ref, untracked)
+  if (ahead === 0) return { ref, exists: true, ahead: 0, commits: [], overwritten, fellBackTo }
+
+  const log = await runGit(repoRoot, ['log', '-n', '5', '--format=%h%x00%s', `HEAD..${ref}`])
+  const commits = log.stdout
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const [sha, subject] = line.split('\u0000')
+      return { sha: sha ?? '', subject: subject ?? '' }
+    })
+  return { ref, exists: true, ahead, commits, overwritten, fellBackTo }
+}
+
+async function buildSnapshot(repoRoot: string, base?: string): Promise<GitSnapshot> {
   const [status, gitDir, workingStats, stagedStats, log] = await Promise.all([
     runGit(repoRoot, ['status', '--porcelain=v2', '--branch', '-z']),
     runGit(repoRoot, ['rev-parse', '--absolute-git-dir']),
@@ -334,6 +391,7 @@ async function buildSnapshot(repoRoot: string): Promise<GitSnapshot> {
   const commitLine = log.code === 0 ? log.stdout.trim() : ''
   const [sha, subject] = commitLine.split('\u0000')
   const remote = await readRemote(repoRoot, parsed.branch)
+  const baseStatus = await readBase(repoRoot, remote, parsed.untracked.map((file) => file.path), base)
 
   return {
     repoRoot,
@@ -344,6 +402,7 @@ async function buildSnapshot(repoRoot: string): Promise<GitSnapshot> {
     hasUpstream: parsed.hasUpstream,
     upstream: parsed.upstream,
     remote,
+    base: baseStatus,
     operation: readOperation(gitDir.code === 0 ? gitDir.stdout.trim() : null),
     conflicts: parsed.conflicts,
     staged: withNumstat(parsed.staged, parseNumstat(stagedStats.stdout)),
@@ -355,20 +414,25 @@ async function buildSnapshot(repoRoot: string): Promise<GitSnapshot> {
   }
 }
 
-/** 1.2 秒内复用同一仓库的快照，并发请求合并为一次执行。`fresh` 跳过复用。 */
-export async function getSnapshot(repoRoot: string, fresh = false): Promise<GitSnapshot> {
+/** 1.2 秒内复用同一仓库的快照，并发请求合并为一次执行。`fresh` 跳过复用；`base` 换基准分支时缓存键跟着变。 */
+export async function getSnapshot(
+  repoRoot: string,
+  fresh = false,
+  base?: string
+): Promise<GitSnapshot> {
+  const key = base ? `${repoRoot}::${base}` : repoRoot
   if (!fresh) {
-    const hit = cache.get(repoRoot)
+    const hit = cache.get(key)
     if (hit && Date.now() - hit.at < CACHE_MS) return hit.snapshot
-    const running = inFlight.get(repoRoot)
+    const running = inFlight.get(key)
     if (running) return running
   }
-  const job = buildSnapshot(repoRoot).finally(() => {
-    inFlight.delete(repoRoot)
+  const job = buildSnapshot(repoRoot, base).finally(() => {
+    inFlight.delete(key)
   })
-  inFlight.set(repoRoot, job)
+  inFlight.set(key, job)
   const snapshot = await job
-  cache.set(repoRoot, { at: Date.now(), snapshot })
+  cache.set(key, { at: Date.now(), snapshot })
   return snapshot
 }
 
@@ -595,6 +659,59 @@ export async function rebaseOntoUpstream(repoRoot: string): Promise<GitSnapshot>
   if (!target) throw new GitError('invalid_params', '没有可用的变基目标分支')
   await must(repoRoot, ['rebase', target], `git rebase ${target} 失败`)
   return changed(repoRoot)
+}
+
+/** 拉取基准分支：可选先 fetch，再把选中的基准合进当前分支（可中止，不推送）。
+ *  fetch 失败但本地已有该 ref 时降级用本地基准继续合并——用户要的是「合进来」，不该被网络挡住。 */
+export async function mergeBase(
+  repoRoot: string,
+  options: { base?: string; fetch?: boolean } = {}
+): Promise<MergeBaseOutcome> {
+  const snapshot = await getSnapshot(repoRoot, true, options.base)
+  requireNoOperation(snapshot)
+  // 未跟踪文件本身不妨碍合并，只有「会被合入覆盖」的那些才挡（下面按 overwritten 判断）。
+  if (snapshot.staged.length || snapshot.modified.length) {
+    throw new GitError('invalid_params', '拉取基准分支前请先提交或贮藏当前改动')
+  }
+  const ref = snapshot.base?.ref ?? options.base
+  if (!ref) throw new GitError('invalid_params', '没有可用的基准分支')
+
+  let degraded: { reason: ReturnType<typeof classifyFailure>; detail: string } | null = null
+  if (options.fetch !== false) {
+    const fetched = await runGit(repoRoot, ['fetch', '--prune', remoteName(snapshot)], { write: true })
+    if (fetched.code !== 0) {
+      const detail = fetched.stderr.trim()
+      const reason = classifyFailure(detail)
+      const exists = await runGit(repoRoot, ['rev-parse', '--verify', '--quiet', ref])
+      if (exists.code !== 0) {
+        return { ok: false, stage: 'fetch', reason, detail, snapshot: await changed(repoRoot) }
+      }
+      degraded = { reason, detail }
+    }
+  }
+
+  if (snapshot.base && snapshot.base.overwritten.total > 0) {
+    return {
+      ok: false,
+      stage: 'merge',
+      reason: 'untracked-overwrite',
+      detail: snapshot.base.overwritten.files.join('\n'),
+      snapshot,
+    }
+  }
+
+  const merged = await runGit(repoRoot, ['merge', '--no-edit', ref], { write: true })
+  if (merged.code !== 0) {
+    const detail = merged.stderr.trim() || merged.stdout.trim()
+    return {
+      ok: false,
+      stage: 'merge',
+      reason: classifyFailure(detail),
+      detail,
+      snapshot: await changed(repoRoot),
+    }
+  }
+  return { ok: true, snapshot: await changed(repoRoot), degraded }
 }
 
 /** 有 gh/glab 就直接建 PR/MR；否则返回 compare 链接让面板在浏览器里打开。 */

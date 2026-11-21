@@ -1,5 +1,7 @@
 // 面板文案：跟随 Orca 的界面语言，zh* 用中文，其余英文。
 
+import type { MergeReason, MergeStage } from './protocol'
+
 export type Copy = {
   lang: 'zh' | 'en'
   title: string
@@ -76,6 +78,9 @@ export type Copy = {
   filesCount: (count: number) => string
   stagedGroup: string
   changesGroup: string
+  fileView: string
+  viewTree: string
+  viewFlat: string
   openFile: string
   showDiff: string
   enterSubmodule: string
@@ -113,11 +118,28 @@ export type Copy = {
   noCommits: string
   moreShort: string
   createPr: string
+  baseBranchTitle: string
+  baseShort: string
+  baseAhead: (count: number) => string
+  baseUpToDate: string
+  baseMissing: string
+  baseCommits: (count: number) => string
+  pullBase: string
+  pullBaseFetch: string
+  pullBaseLocal: string
+  viewRaw: string
+  hideRaw: string
+  mergeFailure: (stage: MergeStage, reason: MergeReason) => string
+  mergeDegraded: (reason: MergeReason) => string
+  overwriteBlocked: (count: number) => string
+  baseFellBack: (ref: string) => string
+  localTag: string
   searchCommits: string
-  generateMessage: string
   commitMenu: string
   viewBranches: string
-  backToChanges: string
+  expandCard: string
+  collapseCard: string
+  moreRemote: string
 
   switchTo: string
 }
@@ -198,6 +220,9 @@ const zh: Copy = {
   filesCount: (count) => `${count} 个文件`,
   stagedGroup: '已暂存的更改',
   changesGroup: '更改',
+  fileView: '展示方式',
+  viewTree: '树形',
+  viewFlat: '平铺',
   openFile: '打开文件',
   showDiff: '查看差异',
   enterSubmodule: '进入子模块',
@@ -235,11 +260,40 @@ const zh: Copy = {
   noCommits: '还没有提交',
   moreShort: '更多',
   createPr: '创建 PR',
+  baseBranchTitle: '基准分支',
+  baseShort: '基准',
+  baseAhead: (count) => `基准领先 ${count} 个提交`,
+  baseUpToDate: '基准已合入',
+  baseMissing: '本地还没有这个基准分支，先获取',
+  baseCommits: (count) => `${count} 个提交`,
+  pullBase: '拉取基准分支',
+  pullBaseFetch: '获取并合并',
+  pullBaseLocal: '仅合并本地基准',
+  viewRaw: '查看原始输出',
+  hideRaw: '收起原始输出',
+  mergeFailure: (stage, reason) => {
+    if (stage === 'fetch') {
+      if (reason === 'auth') return '获取失败：没有访问权限或仓库不存在。可以先点「仅合并本地基准」。'
+      if (reason === 'network') return '获取失败：连不上远端（网络或代理）。可以先点「仅合并本地基准」。'
+      return '获取失败：暂时拿不到远端更新。可以先点「仅合并本地基准」。'
+    }
+    if (reason === 'ref-missing') return '合并失败：这个基准分支不存在了，重新选一个。'
+    if (reason === 'untracked-overwrite') return '合并失败：会覆盖本地未跟踪文件，先把它们移走或删掉。'
+    if (reason === 'identity') return '合并失败：本机还没配置 git 用户名与邮箱。'
+    if (reason === 'conflict') return '合并有冲突：去「更改」页解决后再继续。'
+    return '合并失败，展开原始输出看看原因。'
+  },
+  mergeDegraded: (reason) =>
+    `没能获取最新（${reason === 'auth' ? '无访问权限' : reason === 'network' ? '网络不通' : '远端不可用'}），已用本地缓存完成合并。`,
+  overwriteBlocked: (count) => `合入会覆盖 ${count} 个未跟踪文件，先移走或删除它们：`,
+  baseFellBack: (ref) => `原来选的基准已不存在，已回退到 ${ref}。`,
+  localTag: '本地',
   searchCommits: '搜索提交',
-  generateMessage: '生成提交信息（内置）',
   commitMenu: '更多提交方式',
   viewBranches: '分支',
-  backToChanges: '返回更改',
+  expandCard: '展开',
+  collapseCard: '收起',
+  moreRemote: '更多远端操作',
   switchTo: '切换',
 }
 
@@ -319,6 +373,9 @@ const en: Copy = {
   filesCount: (count) => `${count} files`,
   stagedGroup: 'Staged Changes',
   changesGroup: 'Changes',
+  fileView: 'Display',
+  viewTree: 'Tree',
+  viewFlat: 'Flat',
   openFile: 'Open file',
   showDiff: 'Show diff',
   enterSubmodule: 'Enter submodule',
@@ -356,11 +413,40 @@ const en: Copy = {
   noCommits: 'No commits yet',
   moreShort: 'More',
   createPr: 'Create PR',
+  baseBranchTitle: 'Base branch',
+  baseShort: 'Base',
+  baseAhead: (count) => `Base is ${count} commit(s) ahead`,
+  baseUpToDate: 'Base is already in',
+  baseMissing: 'Base branch is not fetched yet',
+  baseCommits: (count) => `${count} commit(s)`,
+  pullBase: 'Pull base branch',
+  pullBaseFetch: 'Fetch and merge',
+  pullBaseLocal: 'Merge local base only',
+  viewRaw: 'Show raw output',
+  hideRaw: 'Hide raw output',
+  mergeFailure: (stage, reason) => {
+    if (stage === 'fetch') {
+      if (reason === 'auth') return 'Fetch failed: no access to the remote. Try “Merge local base only”.'
+      if (reason === 'network') return 'Fetch failed: cannot reach the remote. Try “Merge local base only”.'
+      return 'Fetch failed: remote is unavailable. Try “Merge local base only”.'
+    }
+    if (reason === 'ref-missing') return 'Merge failed: that base branch no longer exists.'
+    if (reason === 'untracked-overwrite') return 'Merge failed: it would overwrite untracked files.'
+    if (reason === 'identity') return 'Merge failed: git user.name/email is not configured.'
+    if (reason === 'conflict') return 'Merge has conflicts: resolve them on the Changes tab.'
+    return 'Merge failed. Show the raw output for details.'
+  },
+  mergeDegraded: (reason) =>
+    `Could not fetch the latest (${reason === 'auth' ? 'no access' : reason === 'network' ? 'network' : 'remote unavailable'}); merged with the local base instead.`,
+  overwriteBlocked: (count) => `Merging would overwrite ${count} untracked file(s); move or delete them first:`,
+  baseFellBack: (ref) => `The selected base no longer exists; fell back to ${ref}.`,
+  localTag: 'local',
   searchCommits: 'Search commits',
-  generateMessage: 'Generate message (built-in)',
   commitMenu: 'More commit actions',
   viewBranches: 'Branches',
-  backToChanges: 'Back to changes',
+  expandCard: 'Expand',
+  collapseCard: 'Collapse',
+  moreRemote: 'More remote actions',
   switchTo: 'Switch',
 }
 

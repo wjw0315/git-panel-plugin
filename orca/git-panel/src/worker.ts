@@ -137,7 +137,7 @@ export default function activate(orca: OrcaWorkerApi): () => void {
 
   orca.panels.handle('git.snapshot', async (input) => {
     try {
-      return await git.getSnapshot(input.repoRoot, input.fresh === true)
+      return await git.getSnapshot(input.repoRoot, input.fresh === true, input.base)
     } catch (error) {
       fail(error)
     }
@@ -351,6 +351,23 @@ export default function activate(orca: OrcaWorkerApi): () => void {
   orca.panels.handle('git.rebase', async (input) =>
     remoteAction(() => git.rebaseOntoUpstream(input.repoRoot))
   )
+
+  // 合并结果自带快照与失败原因（ok:false 不抛错），所以不复用 remoteAction。
+  orca.panels.handle('git.mergeBase', async (input) => {
+    try {
+      const outcome = await serial(() =>
+        git.mergeBase(input.repoRoot, {
+          ...(input.base ? { base: input.base } : {}),
+          ...(input.fetch === false ? { fetch: false } : {}),
+        })
+      )
+      publish(outcome.snapshot)
+      void refreshStatusBar()
+      return outcome
+    } catch (error) {
+      fail(error)
+    }
+  })
 
   orca.panels.handle('git.abortOperation', async (input) =>
     remoteAction(() => git.abortOperation(input.repoRoot))
