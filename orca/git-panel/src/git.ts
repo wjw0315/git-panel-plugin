@@ -918,7 +918,8 @@ export async function listBranches(repoRoot: string): Promise<BranchList> {
   for (const line of refs.stdout.split('\n')) {
     if (!line.trim()) continue
     const [full, short] = line.split('\u0001')
-    if (!short || short.includes('HEAD')) continue
+    // `refs/remotes/<remote>/HEAD` 会被短成 `<remote>`，按完整 refname 过滤。
+    if (!short || full?.endsWith('/HEAD') === true) continue
     const isRemote = full?.startsWith('refs/remotes/') === true
     branches.push({
       name: short,

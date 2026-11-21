@@ -1,7 +1,7 @@
 // 两张卡：「更多远端操作」把内置溢出菜单的 13 项收进来；「分支」负责切换/新建/删除。
 // 面板没有页签，它们都是可折叠卡，默认收起。
 
-import { Button, Input, read, Row, Separator, set, Stack, Text } from 'orca'
+import { Box, Button, IconButton, Input, read, Row, Separator, set, Stack, Text } from 'orca'
 import { actionRow } from './rows'
 import type { Copy } from './strings'
 import {
@@ -202,12 +202,17 @@ export function branchCard(text: Copy) {
           const confirming = read(deleteConfirm) === branch.name
           return (
             <Row key={branch.name} justify="between" align="center" gap="xs">
-              <Text size="sm" truncate>
-                {`${branch.name}${branch.remote ? ` · ${text.remoteBranchTag}` : ''}${
-                  branch.current ? ` · ${text.currentBranchLabel}` : ''
-                }`}
-              </Text>
-              <Row gap="xs" align="center">
+              <Box grow direction="column" gap="none">
+                <Text size="sm" truncate>
+                  {branch.name}
+                </Text>
+                <Text size="xs" muted>
+                  {[branch.remote ? text.remoteBranchTag : null, branch.current ? text.currentBranchLabel : null]
+                    .filter(Boolean)
+                    .join(' · ') || ' '}
+                </Text>
+              </Box>
+              <Row gap="none" align="center">
                 {branch.current ? null : (
                   <Button
                     size="xs"
@@ -224,17 +229,17 @@ export function branchCard(text: Copy) {
                     tone="danger"
                     onPress={() => deleteBranch(branch.name, true)}
                   >
-                    {`${text.forceDeleteBranch} ${branch.name}`}
+                    {text.forceDeleteBranch}
                   </Button>
                 ) : (
-                  <Button
+                  <IconButton
+                    icon="delete"
                     size="xs"
                     variant="ghost"
                     tone="danger"
+                    label={`${text.deleteBranch} ${branch.name}`}
                     onPress={() => set(deleteConfirm, branch.name)}
-                  >
-                    {`${text.deleteBranch} ${branch.name}`}
-                  </Button>
+                  />
                 )}
               </Row>
             </Row>
