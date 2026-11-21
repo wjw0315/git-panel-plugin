@@ -369,6 +369,8 @@ export const prStatus = atom<PullRequestStatus>(null)
 export const branches = atom<BranchList['branches']>([])
 export const branchDraft = atom('')
 export const branchCreating = atom(false)
+/** 分支页的过滤词；同一会话内切页签保留。 */
+export const branchFilter = atom('')
 export const deleteConfirm = atom<string | null>(null)
 
 const HISTORY_PAGE = 20

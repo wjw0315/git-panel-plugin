@@ -2,12 +2,14 @@
 // 面板没有页签，它们都是可折叠卡，默认收起。
 
 import { Box, Button, IconButton, Input, read, Row, Separator, set, Stack, Text } from 'orca'
+import { filterBranches, groupBranches, type BranchRow } from './branch-view'
 import { actionRow } from './rows'
 import type { Copy } from './strings'
 import {
   amend,
   branchCreating,
   branchDraft,
+  branchFilter,
   branches,
   commitWith,
   createBranch,
@@ -166,12 +168,63 @@ export function remoteMenu(text: Copy) {
 }
 
 export function branchCard(text: Copy) {
-  const list = read(branches)
+  const query = read(branchFilter)
+  const matched = filterBranches(read(branches), query)
+  const { current, local, remote } = groupBranches(matched)
+
+  const row = (branch: BranchRow) => {
+    const confirming = read(deleteConfirm) === branch.name
+    return (
+      <Row key={branch.name} justify="between" align="center" gap="xs">
+        <Box grow direction="column" gap="none">
+          <Text size="sm" truncate>
+            {branch.name}
+          </Text>
+          <Text size="xs" muted>
+            {[branch.remote ? text.remoteBranchTag : null, branch.current ? text.currentBranchLabel : null]
+              .filter(Boolean)
+              .join(' · ') || ' '}
+          </Text>
+        </Box>
+        <Row gap="none" align="center">
+          {branch.current ? null : (
+            <Button
+              size="xs"
+              variant="outline"
+              onPress={() => switchBranch(branch.name, branch.remote)}
+            >
+              {text.switchTo}
+            </Button>
+          )}
+          {branch.remote || branch.current ? null : confirming ? (
+            <Button
+              size="xs"
+              variant="ghost"
+              tone="danger"
+              onPress={() => deleteBranch(branch.name, true)}
+            >
+              {text.forceDeleteBranch}
+            </Button>
+          ) : (
+            <IconButton
+              icon="delete"
+              size="xs"
+              variant="ghost"
+              tone="danger"
+              label={`${text.deleteBranch} ${branch.name}`}
+              onPress={() => set(deleteConfirm, branch.name)}
+            />
+          )}
+        </Row>
+      </Row>
+    )
+  }
+
   return (
     <Stack gap="xs">
       <Row justify="between" align="center">
         <Text size="xs" muted>
-          {text.filesCount(list.length)}
+          {text.filesCount(matched.length)}
         </Text>
         {branchCreating ? null : (
           <Button size="xs" variant="ghost" icon="add" onPress={() => set(branchCreating, true)}>
@@ -179,72 +232,72 @@ export function branchCard(text: Copy) {
           </Button>
         )}
       </Row>
-      {branchCreating ? (
-          <Row gap="xs" align="center">
-            <Input
-              label={text.branchNamePlaceholder}
-              labelHidden
-              value={read(branchDraft)}
-              placeholder={text.branchNamePlaceholder}
-              onChange={(value) => set(branchDraft, value)}
-              onSubmit={createBranch}
-            />
-            <Button size="xs" variant="solid" onPress={createBranch}>
-              {text.createBranch}
-            </Button>
-            <Button size="xs" variant="ghost" onPress={() => set(branchCreating, false)}>
-              {text.cancelBranch}
-            </Button>
-          </Row>
-        ) : null}
 
-        {list.map((branch) => {
-          const confirming = read(deleteConfirm) === branch.name
-          return (
-            <Row key={branch.name} justify="between" align="center" gap="xs">
-              <Box grow direction="column" gap="none">
-                <Text size="sm" truncate>
-                  {branch.name}
-                </Text>
-                <Text size="xs" muted>
-                  {[branch.remote ? text.remoteBranchTag : null, branch.current ? text.currentBranchLabel : null]
-                    .filter(Boolean)
-                    .join(' · ') || ' '}
-                </Text>
-              </Box>
-              <Row gap="none" align="center">
-                {branch.current ? null : (
-                  <Button
-                    size="xs"
-                    variant="outline"
-                    onPress={() => switchBranch(branch.name, branch.remote)}
-                  >
-                    {text.switchTo}
-                  </Button>
-                )}
-                {branch.remote || branch.current ? null : confirming ? (
-                  <Button
-                    size="xs"
-                    variant="ghost"
-                    tone="danger"
-                    onPress={() => deleteBranch(branch.name, true)}
-                  >
-                    {text.forceDeleteBranch}
-                  </Button>
-                ) : (
-                  <IconButton
-                    icon="delete"
-                    size="xs"
-                    variant="ghost"
-                    tone="danger"
-                    label={`${text.deleteBranch} ${branch.name}`}
-                    onPress={() => set(deleteConfirm, branch.name)}
-                  />
-                )}
-              </Row>
-            </Row>
-          )
-        })}
+      <Row gap="xs" align="center">
+        <Box grow>
+          <Input
+            label={text.searchBranches}
+            labelHidden
+            value={query}
+            placeholder={text.searchBranches}
+            onChange={(value) => set(branchFilter, value)}
+          />
+        </Box>
+        {query ? (
+          <IconButton
+            icon="close"
+            size="xs"
+            variant="ghost"
+            label={text.clearSearch}
+            onPress={() => set(branchFilter, '')}
+          />
+        ) : null}
+      </Row>
+
+      {branchCreating ? (
+        <Row gap="xs" align="center">
+          <Input
+            label={text.branchNamePlaceholder}
+            labelHidden
+            value={read(branchDraft)}
+            placeholder={text.branchNamePlaceholder}
+            onChange={(value) => set(branchDraft, value)}
+            onSubmit={createBranch}
+          />
+          <Button size="xs" variant="solid" onPress={createBranch}>
+            {text.createBranch}
+          </Button>
+          <Button size="xs" variant="ghost" onPress={() => set(branchCreating, false)}>
+            {text.cancelBranch}
+          </Button>
+        </Row>
+      ) : null}
+
+      {current ? row(current) : null}
+
+      {local.length ? (
+        <Stack gap="none">
+          <Text size="xs" muted>
+            {`${text.localBranches} ${local.length}`}
+          </Text>
+          {local.map(row)}
+        </Stack>
+      ) : null}
+
+      {remote.length ? (
+        <Stack gap="none">
+          <Text size="xs" muted>
+            {`${text.remoteBranches} ${remote.length}`}
+          </Text>
+          {remote.map(row)}
+        </Stack>
+      ) : null}
+
+      {matched.length === 0 ? (
+        <Text size="xs" muted>
+          {text.noBranchMatch}
+        </Text>
+      ) : null}
     </Stack>
   )
 }

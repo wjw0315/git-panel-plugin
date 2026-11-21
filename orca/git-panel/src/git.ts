@@ -46,7 +46,12 @@ export function runGit(
   args: readonly string[],
   options: { timeoutMs?: number; write?: boolean } = {}
 ): Promise<GitResult> {
-  const env = options.write ? process.env : { ...process.env, GIT_OPTIONAL_LOCKS: '0' }
+  // GIT_TERMINAL_PROMPT=0：远端要账号密码时立即失败，而不是挂在等输入上（面板里没人能回答）。
+  const env: Record<string, string | undefined> = {
+    ...process.env,
+    GIT_TERMINAL_PROMPT: '0',
+    ...(options.write ? {} : { GIT_OPTIONAL_LOCKS: '0' }),
+  }
   // Promise.withResolvers 需要 ES2024 lib，这里目标仍是 ES2022，手写一个等价的延迟器。
   let settle: (value: GitResult) => void = () => undefined
   const done = new Promise<GitResult>((resolve) => {

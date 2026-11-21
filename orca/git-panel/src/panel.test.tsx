@@ -431,6 +431,34 @@ test('v5: a degraded merge says it used the local base', async () => {
   await view.unmount()
 })
 
+test('v6: the branch page filters by name and groups local vs remote', async () => {
+  const { host } = harness()
+  const view = await mount(panel, { host, locale: 'zh-CN' })
+  await view.select({ type: 'Tabs' }, 'branch')
+
+  let drawn = JSON.stringify(view.tree())
+  assert.match(drawn, /本地 1/)
+  assert.match(drawn, /远端 1/)
+
+  // 过滤：本地组整组消失，只剩远端那一条。
+  await view.type({ label: '搜索分支' }, 'origin')
+  drawn = JSON.stringify(view.tree())
+  assert.equal(drawn.includes('本地 1'), false)
+  assert.match(drawn, /远端 1/)
+  assert.match(drawn, /origin\/main/)
+
+  // 无匹配
+  await view.type({ label: '搜索分支' }, 'zzz', { replace: true })
+  assert.match(JSON.stringify(view.tree()), /没有匹配的分支/)
+
+  // 清空按钮恢复完整列表
+  await view.press({ label: '清空搜索' })
+  drawn = JSON.stringify(view.tree())
+  assert.match(drawn, /本地 1/)
+  assert.match(drawn, /远端 1/)
+  await view.unmount()
+})
+
 test('v4.1: buildTree nests directories, sorts them, and keeps root files at the top', () => {
   const tree = buildTree([
     { path: 'src/utils/b.ts', status: 'modified', additions: 1, deletions: 0 },

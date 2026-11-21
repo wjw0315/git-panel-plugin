@@ -137,6 +137,11 @@ export type Copy = {
   searchCommits: string
   commitMenu: string
   viewBranches: string
+  searchBranches: string
+  clearSearch: string
+  localBranches: string
+  remoteBranches: string
+  noBranchMatch: string
   expandCard: string
   collapseCard: string
   moreRemote: string
@@ -291,6 +296,11 @@ const zh: Copy = {
   searchCommits: '搜索提交',
   commitMenu: '更多提交方式',
   viewBranches: '分支',
+  searchBranches: '搜索分支',
+  clearSearch: '清空搜索',
+  localBranches: '本地',
+  remoteBranches: '远端',
+  noBranchMatch: '没有匹配的分支',
   expandCard: '展开',
   collapseCard: '收起',
   moreRemote: '更多远端操作',
@@ -444,6 +454,11 @@ const en: Copy = {
   searchCommits: 'Search commits',
   commitMenu: 'More commit actions',
   viewBranches: 'Branches',
+  searchBranches: 'Search branches',
+  clearSearch: 'Clear search',
+  localBranches: 'Local',
+  remoteBranches: 'Remote',
+  noBranchMatch: 'No matching branches',
   expandCard: 'Expand',
   collapseCard: 'Collapse',
   moreRemote: 'More remote actions',
