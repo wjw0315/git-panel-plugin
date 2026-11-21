@@ -3,745 +3,514 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Orca Git 面板 · 交互稿 v4（可点）</title>
+<title>Orca Git 面板 · 交互稿 v4.2（可点，与实现对版）</title>
 <!--
-  可点原型。规格见 UI-V4.md。
-  每张卡都能点：暂存/取消暂存（文件在两卡之间移动）、提交菜单、丢弃确认、冲突、仓库切换、基准拉取、历史展开。
-  数据全在页面内，不碰 git。
+  可点原型，与 orca/git-panel 已发布的行为一致（v4.2）。
+  规格见同目录 UI-V4.md。只有 Orca components 里存在的组件形态：Tabs / Select / Button /
+  IconButton / Textarea / Checkbox / Collapsible / CodeView / Callout。
+  数据在页面里，不碰 git。六个场景按钮切换状态。
 -->
 <style>
   * { box-sizing: border-box; }
   :root {
     --page: #0d0e11; --page-fg: #a9aeb9; --page-dim: #6d7280;
-    --bg: #17181c; --panel: #1c1e23; --panel-2: #23262c; --line: #2a2d34; --line-2: #373b44;
-    --fg: #d9dbe1; --muted: #8a8f9a; --accent: #7b9cf0; --accent-soft: #7b9cf022;
-    --success: #58b184; --warning: #d3a25c; --danger: #d97b72;
+    --bg: #17181c; --panel: #faf9f4; --panel-2: #f2f0e8; --line: #e2dfd4; --line-2: #cfcaba;
+    --fg: #2b2a26; --muted: #7c776a; --accent: #4d6fd0; --accent-soft: #4d6fd018;
+    --success: #2f7d55; --warning: #8a6420; --danger: #a8423a;
     --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
     --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", sans-serif;
   }
-  body.light {
-    --page: #eef0f3; --page-fg: #4a4f59; --page-dim: #7c828d;
-    --bg: #f4f5f7; --panel: #ffffff; --panel-2: #f4f6f9; --line: #e4e6eb; --line-2: #d3d7de;
-    --fg: #22252b; --muted: #6b7280; --accent: #3f63c8; --success: #2f8b5f; --warning: #9a6b20; --danger: #b4453c;
+  body.dark {
+    --bg: #17181c; --panel: #1c1e23; --panel-2: #23262c; --line: #2c3037; --line-2: #3a3f48;
+    --fg: #d9dbe1; --muted: #8a8f9a; --accent: #7b9cf0; --accent-soft: #7b9cf022;
+    --success: #58b184; --warning: #d3a25c; --danger: #d97b72;
   }
   html, body { margin: 0; background: var(--page); color: var(--page-fg); font-family: var(--sans); }
-  .wrap { max-width: 1180px; margin: 0 auto; padding: 36px 32px 64px; }
-  header.top { display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
-  header.top h1 { margin: 0; font-size: 19px; color: var(--fg); letter-spacing: -.01em; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 34px 28px 60px; }
+  header.top { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; padding-bottom: 14px; border-bottom: 1px solid #24262c; }
+  header.top h1 { margin: 0; font-size: 19px; color: #e7e9ee; }
   header.top .hint { font-size: 12px; color: var(--page-dim); }
-  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin: 18px 0 22px; align-items: center; }
-  .toolbar .seg { display: flex; border: 1px solid var(--line-2); border-radius: 7px; overflow: hidden; }
-  .toolbar .seg button { background: transparent; border: 0; color: var(--page-fg); font: inherit; font-size: 12px; padding: 6px 12px; cursor: pointer; }
-  .toolbar .seg button + button { border-left: 1px solid var(--line-2); }
-  .toolbar .seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
-  .toolbar .ghost { background: transparent; border: 1px solid var(--line-2); color: var(--page-fg); border-radius: 7px; font: inherit; font-size: 12px; padding: 6px 12px; cursor: pointer; }
-  .stage-area { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; }
-  .app { display: flex; width: 760px; height: 720px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--bg); }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 16px 0 20px; }
+  .toolbar button { background: transparent; border: 1px solid #2f333c; color: #b9bdc7; border-radius: 7px; font: inherit; font-size: 12px; padding: 6px 11px; cursor: pointer; }
+  .toolbar button[aria-pressed="true"] { border-color: #4b5568; background: #ffffff10; color: #e7e9ee; }
+  .stage-area { display: flex; gap: 26px; align-items: flex-start; flex-wrap: wrap; }
+
+  /* 假 Orca 外壳 + 398px 侧栏（实机 shot 的宽度） */
+  .app { display: flex; width: 760px; height: 760px; border: 1px solid #24262c; border-radius: 12px; overflow: hidden; background: var(--bg); }
   .app .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-  .app .chrome { height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 11px; }
-  .dots { display: flex; gap: 4px; }
-  .dots i { width: 8px; height: 8px; border-radius: 50%; background: #3a3e47; }
-  .ghostpane { flex: 1; background: repeating-linear-gradient(180deg, transparent 0 30px, #ffffff06 30px 31px); opacity: .45; }
-  .side { width: var(--w, 320px); flex: none; background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; overflow: hidden; }
-  .side-head { height: 30px; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; border-bottom: 1px solid var(--line); font-size: 11px; font-weight: 600; color: var(--fg); }
-  .pane { display: flex; flex: 1; min-height: 0; }
-  .body { padding: 8px; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; flex: 1; min-width: 0; }
-  #preview { display: none; width: 52%; border-left: 1px solid var(--line); overflow: auto; padding: 8px; background: var(--bg); }
-  .app[data-w="wide"] #preview { display: block; }
-  .preview-head { font-size: 11px; color: var(--muted); margin-bottom: 6px; word-break: break-all; }
-  .diff { font-family: var(--mono); font-size: 10.5px; line-height: 1.6; white-space: pre; }
-  .diff .hunk { color: var(--accent); }
-  .diff .add { color: var(--success); }
-  .diff .del { color: var(--danger); }
-  .diff .ctx { color: var(--muted); }
-  .empty-preview { font-size: 11px; color: var(--muted); padding-top: 12px; text-align: center; }
+  .app .chrome { height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-bottom: 1px solid #2a2d34; color: #8a8f9a; font-size: 11px; }
+  .dots { display: flex; gap: 4px; } .dots i { width: 8px; height: 8px; border-radius: 50%; background: #3a3e47; }
+  .ghostpane { flex: 1; background: repeating-linear-gradient(180deg, transparent 0 30px, #ffffff06 30px 31px); opacity: .4; }
+  .side { width: 398px; flex: none; background: var(--panel); color: var(--fg); display: flex; flex-direction: column; overflow: hidden; border-left: 1px solid var(--line); }
+  .body { padding: 8px 10px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; flex: 1; }
   .foot { border-top: 1px solid var(--line); padding: 6px 10px 8px; }
 
-  /* 组件词汇（模拟 Orca components） */
   .row { display: flex; align-items: center; gap: 6px; }
   .row.between { justify-content: space-between; }
-  .row.end { justify-content: flex-end; }
-  .grow { flex: 1; min-width: 0; }
   .col { display: flex; flex-direction: column; gap: 4px; }
+  .grow { flex: 1; min-width: 0; }
   .txt { font-size: 13px; color: var(--fg); line-height: 1.35; }
   .txt.sm { font-size: 12px; } .txt.xs { font-size: 11px; }
   .txt.muted { color: var(--muted); }
   .txt.mono { font-family: var(--mono); font-size: 11px; }
   .txt.w { color: var(--warning); } .txt.s { color: var(--success); } .txt.d { color: var(--danger); } .txt.a { color: var(--accent); }
+  .txt.strong { font-weight: 600; }
   .trunc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
   button { font: inherit; }
-  .ibtn { width: 22px; height: 22px; display: inline-grid; place-items: center; border: 0; background: transparent; border-radius: 5px; color: var(--muted); font-size: 12px; cursor: pointer; padding: 0; }
+  .ibtn { width: 24px; height: 24px; display: inline-grid; place-items: center; border: 1px solid var(--line-2); background: transparent; border-radius: 6px; color: var(--muted); font-size: 12px; cursor: pointer; padding: 0; }
+  .ibtn.bare { border-color: transparent; }
   .ibtn:hover { background: var(--panel-2); color: var(--fg); }
   .ibtn.d { color: var(--danger); }
-  .ibtn:disabled { opacity: .35; cursor: default; }
-  .btn { height: 26px; padding: 0 10px; display: inline-flex; align-items: center; gap: 5px; border-radius: 6px; font-size: 12px; border: 1px solid transparent; background: transparent; color: var(--fg); cursor: pointer; white-space: nowrap; }
-  .btn.solid { background: var(--accent); color: #10131a; font-weight: 600; }
-  .btn.solid:disabled { background: var(--panel-2); color: var(--muted); font-weight: 500; box-shadow: inset 0 0 0 1px var(--line-2); }
-  .btn.outline { border-color: var(--line-2); }
-  .btn.ghost { color: var(--muted); }
+  .ibtn:disabled { opacity: .4; cursor: default; }
+  .btn { height: 26px; padding: 0 10px; display: inline-flex; align-items: center; gap: 5px; border-radius: 6px; font-size: 12px; border: 1px solid var(--line-2); background: transparent; color: var(--fg); cursor: pointer; white-space: nowrap; }
+  .btn.solid { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .btn.solid:disabled { background: var(--panel-2); border-color: var(--line-2); color: var(--muted); font-weight: 500; }
+  .btn.ghost { border-color: transparent; color: var(--muted); }
+  .btn.danger { color: var(--danger); border-color: color-mix(in oklab, var(--danger) 40%, transparent); }
   .btn.sm { height: 22px; font-size: 11px; padding: 0 8px; }
-  .btn.danger { color: var(--danger); }
-  .sel { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 8px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--panel-2); font-size: 12px; color: var(--fg); cursor: pointer; }
-  .sel .kind { color: var(--muted); }
-  .sel .name { font-weight: 600; }
-  .sel .br { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+  /* 顶部页签（宿主 Tabs） */
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); padding: 0 2px; overflow-x: auto; }
+  .tabs button { border: 0; background: transparent; color: var(--muted); font-size: 12px; padding: 7px 8px 6px; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
+  .tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--fg); font-weight: 600; }
+
+  .sel { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 8px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--panel-2); font-size: 12px; cursor: pointer; }
   .badge { font-size: 10px; padding: 1px 6px; border-radius: 999px; border: 1px solid currentColor; color: var(--muted); }
   .badge.w { color: var(--warning); } .badge.s { color: var(--success); } .badge.a { color: var(--accent); }
-  .card { border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); overflow: hidden; }
-  .card > .head { display: flex; align-items: center; gap: 6px; padding: 5px 8px; cursor: pointer; }
-  .card > .head:hover { background: #ffffff05; }
-  .card .chev { width: 14px; text-align: center; color: var(--muted); font-size: 9px; }
-  .card .title { font-size: 12px; font-weight: 600; color: var(--fg); }
-  .card .count { font-size: 11px; color: var(--muted); }
-  .card .tail { margin-left: auto; display: flex; align-items: center; gap: 4px; }
-  .card .inner { padding: 0 8px 8px; display: flex; flex-direction: column; gap: 6px; }
-  .card.collapsed > .inner { display: none; }
-  .card.collapsed .chev { transform: rotate(0deg); }
-  .card:not(.collapsed) .chev { transform: rotate(90deg); }
-  textarea.msg { width: 100%; min-height: 46px; resize: vertical; background: var(--panel); border: 1px solid var(--line-2); border-radius: 6px; color: var(--fg); font: inherit; font-size: 12px; padding: 6px 7px; }
+  textarea.msg { width: 100%; min-height: 48px; resize: vertical; background: var(--panel); border: 1px solid var(--line-2); border-radius: 6px; color: var(--fg); font: inherit; font-size: 12px; padding: 6px 7px; }
   textarea.msg::placeholder { color: var(--muted); }
-  .file { display: flex; align-items: center; gap: 6px; padding: 3px 2px; border-radius: 5px; }
-  .file:hover { background: #ffffff06; }
+  .file { display: flex; align-items: center; gap: 6px; padding: 3px 0; }
   .file .letter { width: 13px; text-align: center; font-family: var(--mono); font-size: 11px; font-weight: 700; }
-  .file .acts { display: flex; gap: 1px; margin-left: auto; }
-  .file .stat { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
-  .file .stat .p { color: var(--success); } .file .stat .n { color: var(--danger); }
-  .confirm { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 6px; background: color-mix(in oklab, var(--danger) 12%, transparent); border: 1px solid color-mix(in oklab, var(--danger) 35%, transparent); }
-  .callout { border: 1px solid color-mix(in oklab, var(--danger) 45%, transparent); background: color-mix(in oklab, var(--danger) 10%, transparent); border-radius: 8px; padding: 7px 8px; display: flex; flex-direction: column; gap: 6px; }
-  .callout .t { font-size: 12px; font-weight: 600; color: var(--danger); }
-  .menu { border: 1px solid var(--line-2); border-radius: 7px; background: var(--panel); padding: 3px; box-shadow: 0 10px 24px #00000055; }
-  .menu .mi { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 7px; border-radius: 4px; font-size: 12px; color: var(--fg); cursor: pointer; }
-  .menu .mi:hover { background: var(--panel-2); }
+  .file .acts { display: flex; gap: 2px; margin-left: auto; }
+  .stat { font-family: var(--mono); font-size: 10.5px; color: var(--muted); white-space: nowrap; }
+  .stat .p { color: var(--success); } .stat .n { color: var(--danger); }
+  .dir { display: flex; align-items: center; gap: 6px; padding: 3px 0; }
+  .indent { padding-left: 14px; }
+  .callout { border: 1px solid color-mix(in oklab, var(--danger) 45%, transparent); background: color-mix(in oklab, var(--danger) 8%, transparent); border-radius: 8px; padding: 7px 8px; font-size: 12px; color: var(--danger); }
+  .note { font-size: 11px; color: var(--muted); }
+  .code { font-family: var(--mono); font-size: 10.5px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 6px; white-space: pre-wrap; color: var(--muted); }
+  .menu { border: 1px solid var(--line-2); border-radius: 7px; background: var(--panel-2); padding: 3px; }
+  .menu .mi { display: flex; justify-content: space-between; gap: 8px; padding: 5px 7px; border-radius: 4px; font-size: 12px; cursor: pointer; }
+  .menu .mi:hover { background: var(--panel); }
   .menu .mi.dis { color: var(--muted); cursor: default; }
-  .menu .mi .why { font-size: 11px; color: var(--muted); }
-  .menu .sep { height: 1px; background: var(--line); margin: 3px 2px; }
-  .hint { font-size: 11px; color: var(--muted); }
-  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--line-2); color: var(--fg); font-size: 12px; padding: 8px 14px; border-radius: 8px; opacity: 0; transition: opacity .16s; pointer-events: none; }
-  .toast.on { opacity: 1; }
-  .notes { width: 320px; font-size: 12px; line-height: 1.7; color: var(--page-dim); }
-  .notes h2 { font-size: 13px; color: var(--fg); margin: 0 0 8px; }
-  .notes li { margin-bottom: 6px; }
+  .notes { width: 300px; font-size: 12px; line-height: 1.7; color: var(--page-dim); }
+  .notes h2 { font-size: 13px; color: #c8ccd5; margin: 0 0 8px; }
   .notes code { font-family: var(--mono); font-size: 11px; color: #9aa0ad; }
+  .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: #23262c; color: #e7e9ee; border: 1px solid #3a3f48; font-size: 12px; padding: 7px 13px; border-radius: 8px; opacity: 0; transition: opacity .15s; pointer-events: none; }
+  .toast.on { opacity: 1; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header class="top">
-    <h1>Orca Git 面板 · 交互稿 v4</h1>
-    <span class="hint">单页 · 八张可折叠卡 · 没有页签和返回键 &nbsp;|&nbsp; 规格 <code>UI-V4.md</code></span>
+    <h1>Orca Git 面板 · 交互稿 v4.2</h1>
+    <span class="hint">顶部页签 · 文件树双视图 · 基准可自选/可降级 · 与 <code>orca/git-panel</code> 当前实现一致</span>
   </header>
 
-  <div class="toolbar">
-    <div class="seg" id="scenarios">
-      <button data-s="dirty" aria-pressed="true">有改动</button>
-      <button data-s="clean">干净</button>
-      <button data-s="conflict">冲突</button>
-      <button data-s="sub">子模块</button>
-    </div>
-    <button class="ghost" id="theme">切换亮色</button>
-    <button class="ghost" id="reset">重置状态</button>
-    <label class="ghost" style="display:flex;align-items:center;gap:8px;cursor:default">
-      宽度 <input type="range" id="width" min="280" max="720" step="20" value="320" style="width:120px" />
-      <span id="wlabel" class="txt xs" style="font-family:var(--mono);color:var(--page-dim)">320</span>
-    </label>
+  <div class="toolbar" id="scenarios">
+    <button data-s="dirty" aria-pressed="true">有改动</button>
+    <button data-s="clean">干净</button>
+    <button data-s="tree">树形文件</button>
+    <button data-s="base-fail">基准：无权限</button>
+    <button data-s="base-degraded">基准：降级合并</button>
+    <button data-s="overwrite">基准：未跟踪冲突</button>
+    <button data-s="conflict">合并冲突</button>
+    <button id="theme">切换暗色</button>
   </div>
 
   <div class="stage-area">
-    <div class="app" data-w="narrow">
+    <div class="app">
       <div class="main">
-        <div class="chrome"><div class="dots"><i></i><i></i><i></i></div>geer2-xforms</div>
+        <div class="chrome"><div class="dots"><i></i><i></i><i></i></div>git-panel-plugin</div>
         <div class="ghostpane"></div>
       </div>
       <div class="side">
-        <div class="side-head">GIT <span id="head-state" style="font-weight:400;color:var(--muted)"></span></div>
-        <div class="pane">
-          <div class="body" id="panel"></div>
-          <div id="preview"><div class="empty-preview">选中文件或提交后在这里看差异（≥560px 才出现）</div></div>
-        </div>
-        <div class="foot"><button class="btn ghost sm" style="padding:0">↗ 在外置 Source Control 中打开</button></div>
+        <div class="body" id="panel"></div>
+        <div class="foot"><button class="btn ghost sm" style="padding:0">↗ 在内置源代码控制中打开</button></div>
       </div>
     </div>
 
     <div class="notes">
-      <h2>这一版改了什么</h2>
+      <h2>这一版对应已实现的行为</h2>
       <ul>
-        <li><b>没有页签。</b>历史 / 贮藏 / 分支 / 基准都是可折叠卡，不离开工作区，也没有「返回」。</li>
-        <li><b>提交卡里就是这次提交的内容。</b>点某行的 <code>+</code>，它从「更改」搬到「提交」，反向点 <code>−</code> 搬回去。</li>
-        <li><b>提交是两段式。</b>主按钮 + <code>▾</code> 在卡内展开「提交并推送 / 同步 / 强推」，每种都带不可用原因。</li>
-        <li><b>基准常驻。</b>收起态就写着「领先 3」，展开能看到是哪三条，并可一键拉取。</li>
-        <li><b>13 个远端动作</b>收进顶部 <code>···</code>，不再占一整页。</li>
-        <li><b>冲突永远最先出现</b>，占住顶部，提交按钮同时禁用并写明「有冲突」。</li>
+        <li><b>顶部七个页签</b>：提交 / 更改 / 基准 / 历史 / 贮藏 / 分支 / 更多；标签带计数，一次只显示一页。</li>
+        <li><b>提交页</b>里就是这次要提交的已暂存文件；点更改页的 <code>+</code>，文件从「更改」搬到「提交」。</li>
+        <li><b>更改页</b>右上角切 <code>树形</code> / <code>平铺</code>：树形是单行目录（箭头 + 名字 + 数量 + 目录级动作），只显示文件名。</li>
+        <li><b>基准页</b>可选任意远端/本地分支；两个动作「获取并合并」「仅合并本地基准」；fetch 失败降级合并；失败就地红字 + 原始输出。</li>
+        <li><b>分支页</b>每行两行文字（名字 / 标签），右侧只有一个「切换」和删除图标，不会把按钮顶出边界。</li>
       </ul>
-      <h2 style="margin-top:16px">试着点这些</h2>
+      <h2 style="margin-top:14px">点这些试试</h2>
       <ul>
-        <li>点文件行的 <code>+</code> / <code>−</code>，看它在两张卡之间移动。</li>
-        <li>点「提交」右边的 <code>▾</code>，再点 <code>Esc</code> 收起。</li>
-        <li>点「基准」卡头，展开后点「拉取基准分支」。</li>
-        <li>顶部切到「冲突」，看解决行和完成合并的启用时机。</li>
+        <li>切到「更改」，点 <code>+</code> 把文件挪到「提交」，再回「提交」看内容。</li>
+        <li>「基准：无权限」→ 点「获取并合并」，看红字和「查看原始输出」。</li>
+        <li>「基准：降级合并」→ 点「获取并合并」，看灰字提示。</li>
+        <li>「基准：未跟踪冲突」→ 看被覆盖清单与禁用的按钮。</li>
       </ul>
     </div>
   </div>
 </div>
-
 <div class="toast" id="toast"></div>
 
 <script>
 const FILES = {
-  worker:  { path: 'src/worker.ts',  status: 'M', add: 40, del: 8 },
-  panel:   { path: 'src/panel.tsx',  status: 'M', add: 12, del: 3 },
-  state:   { path: 'src/state.ts',   status: 'M', add: 6,  del: 2 },
-  html:    { path: 'docs/ui-v4.html', status: 'A', add: 612, del: 0 },
-  notes:   { path: 'notes.md',        status: '?', add: null, del: null },
-  legacy:  { path: 'src/legacy.ts',   status: 'D', add: 0, del: 240 },
+  'src/worker.ts': { status: 'M', add: 40, del: 8 },
+  'src/state.ts': { status: 'M', add: 6, del: 2 },
+  'src/base-card.tsx': { status: 'A', add: 120, del: 0 },
+  'docs/ui-v4.html': { status: 'M', add: 30, del: 4 },
+  'notes.md': { status: '?', add: null, del: null },
 };
-const REPOS = [
-  { id: 'root', kind: '主仓库', name: 'geer2-xforms', branch: 'main', dirty: true },
-  { id: 'sub', kind: '子模块', name: 'vendor/lib', branch: 'main', dirty: false },
-  { id: 'nested', kind: '嵌套仓库', name: 'tools/cli', branch: 'dev', dirty: true },
-];
-const BASE_COMMITS = [
+const COMMITS = [
   { sha: '9f8e7d6', subject: 'feat: base moved on' },
   { sha: '8a7b6c5', subject: 'fix: base also fixed this' },
   { sha: '7c6b5a4', subject: 'chore: base housekeeping' },
 ];
+const BRANCHES = [
+  { name: 'main', remote: false, current: true },
+  { name: 'prototype/conflict-resolution', remote: false, current: false },
+  { name: 'prototype/file-tree-context-menu', remote: false, current: false },
+  { name: 'origin/main', remote: true, current: false },
+];
 const HISTORY = [
-  { sha: 'a1b2c3d', subject: 'feat: 单页卡片式面板', who: '我', when: '12 分钟前', files: 5 },
-  { sha: 'b2c3d4e', subject: 'fix: 基准分支计数', who: '我', when: '昨天', files: 2 },
-  { sha: 'c3d4e5f', subject: 'chore: 文案统一', who: '我', when: '2 天前', files: 8 },
+  { sha: 'efbdaec', subject: 'feat(orca): 面板改顶部页签 + 树双视图', when: '10 分钟前' },
+  { sha: 'e91dae4', subject: 'feat(orca): 按 v3 设计稿重做面板', when: '昨天' },
 ];
-const STASHES = [
-  { ref: 'stash@{0}', message: 'WIP on main: 试着做两栏', when: '1 小时前' },
-  { ref: 'stash@{1}', message: 'WIP on feat: 临时存档', when: '昨天' },
-];
-const BRANCHES = ['main', 'feat/git-panel', 'fix/base-count'];
+const STASHES = [{ ref: 'stash@{0}', message: 'WIP on main: 试两栏', when: '1 小时前' }];
 
 const fresh = () => ({
-  scenario: 'dirty',
-  repo: 'root',
-  staged: ['worker', 'html'],
-  changes: ['panel', 'state', 'notes'],
-  message: '',
-  amend: false,
-  commitMenu: false,
-  baseAhead: 3,
-  basePulled: false,
-  conflict: false,
-  conflictResolved: [],
-  open: { commit: true, changes: true, base: false, history: false, stash: false, branch: false },
-  repoMenu: false,
-  branchMenu: false,
-  remoteMenu: false,
-  discard: null,
-  w: 320,
-  preview: null,
-  picked: null,
+  tab: 'changes', staged: [], changes: ['src/worker.ts', 'src/state.ts', 'notes.md'],
+  message: '', amend: false, commitMenu: false, fileView: 'tree', openDirs: { src: true },
+  base: { ref: 'origin/main', ahead: 2, commits: COMMITS.slice(0, 2), overwritten: [], fellBackTo: null },
+  failure: null, degraded: null, detailOpen: false, conflict: false, deleteConfirm: null, repoMenu: false,
 });
 let s = fresh();
 
-const $ = (html) => html; // 模板小工具，保持可读
-const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const file = (key) => FILES[key];
-const repo = () => REPOS.find((r) => r.id === s.repo);
-const stagedFiles = () => s.staged.map(file);
-const changeFiles = () => s.changes.map(file);
-const dirty = () => s.staged.length + s.changes.length > 0;
-
-const LETTER = { M: 'w', A: 's', '?': 's', D: 'd', R: 'a', C: 'a', U: 'd' };
-const CHEV = '<span class="chev">▶</span>';
-
-function toast(text) {
+const toast = (t) => {
   const el = document.getElementById('toast');
-  el.textContent = text;
-  el.classList.add('on');
-  clearTimeout(toast.t);
-  toast.t = setTimeout(() => el.classList.remove('on'), 1400);
-}
+  el.textContent = t; el.classList.add('on');
+  clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 1300);
+};
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const letter = (st) => ({ M: 'w', A: 's', '?': 's', D: 'd' }[st] || '');
+const stat = (f) => f.add === null ? '' : `<span class="stat">${f.add ? `<span class="p">+${f.add}</span>` : ''} ${f.del ? `<span class="n">−${f.del}</span>` : ''}</span>`;
 
-/* ── 卡头 ────────────────────────────────────────── */
-function head(id, title, count, tail = '', extra = '') {
-  const collapsed = !s.open[id];
-  return `<div class="head" data-card="${id}">
-    ${CHEV}<span class="title">${esc(title)}</span>
-    <span class="count">${esc(count)}</span>
-    ${extra}
-    <span class="tail">${tail}</span>
-  </div>`;
-}
-
-/* ── 文件行 ──────────────────────────────────────── */
-function fileRow(key, area) {
-  const f = file(key);
-  const stat = f.add === null ? '' : `<span class="stat">${f.add ? `<span class="p">+${f.add}</span>` : ''} ${f.del ? `<span class="n">−${f.del}</span>` : ''}</span>`;
-  const confirm = s.discard === key
-    ? `<div class="confirm">
-        <span class="txt xs d grow trunc">丢弃 ${esc(f.path)} 的改动？</span>
-        <button class="btn danger sm" data-act="discard-yes" data-k="${key}">丢弃</button>
-        <button class="btn sm ghost" data-act="discard-no">取消</button>
-      </div>`
-    : '';
+function fileRow(path, area) {
+  const f = FILES[path];
   const acts = area === 'staged'
-    ? `<button class="ibtn" data-act="unstage" data-k="${key}" title="取消暂存">−</button>
-       <button class="ibtn" data-act="diff" data-k="${key}" title="查看差异">&lt;&gt;</button>
-       <button class="ibtn" data-act="open" data-k="${key}" title="打开文件">↗</button>`
+    ? `<button class="ibtn" data-act="unstage" data-p="${path}" title="取消暂存">−</button>
+       <button class="ibtn" data-act="diff" data-p="${path}">&lt;&gt;</button>
+       <button class="ibtn" data-act="open" data-p="${path}">↗</button>`
     : f.status === '?'
-      ? `<button class="ibtn" data-act="stage" data-k="${key}" title="暂存">+</button>
-         <button class="ibtn d" data-act="discard" data-k="${key}" title="删除文件">🗑</button>
-         <button class="ibtn" data-act="open" data-k="${key}" title="打开文件">↗</button>`
-      : `<button class="ibtn" data-act="stage" data-k="${key}" title="暂存">+</button>
-         <button class="ibtn" data-act="diff" data-k="${key}" title="查看差异">&lt;&gt;</button>
-         <button class="ibtn" data-act="open" data-k="${key}" title="打开文件">↗</button>
-         <button class="ibtn d" data-act="discard" data-k="${key}" title="丢弃改动">🗑</button>`;
-  const dir = f.path.includes('/') ? f.path.slice(0, f.path.lastIndexOf('/')) : '';
-  const name = f.path.split('/').pop();
-  const label = s.w >= 480 && dir
-    ? `<span class="txt sm trunc"><span class="muted">${esc(dir)}/</span>${esc(name)}</span>`
-    : `<span class="txt sm trunc">${esc(name)}</span>${dir ? `<span class="txt xs muted trunc">${esc(dir)}</span>` : ''}`;
-  return `<div>
-    <div class="file">
-      <span class="letter txt ${LETTER[f.status]}">${f.status}</span>
-      <span class="col grow" style="gap:0">${label}</span>
-      ${stat}
-      <span class="acts">${acts}</span>
-    </div>
-    ${confirm}
+      ? `<button class="ibtn" data-act="stage" data-p="${path}">+</button>
+         <button class="ibtn d" data-act="discard" data-p="${path}">🗑</button>
+         <button class="ibtn" data-act="open" data-p="${path}">↗</button>`
+      : `<button class="ibtn" data-act="stage" data-p="${path}">+</button>
+         <button class="ibtn" data-act="diff" data-p="${path}">&lt;&gt;</button>
+         <button class="ibtn" data-act="open" data-p="${path}">↗</button>
+         <button class="ibtn d" data-act="discard" data-p="${path}">🗑</button>`;
+  return `<div class="file">
+    <span class="letter txt ${letter(f.status)}">${f.status}</span>
+    <span class="col grow" style="gap:0">
+      ${area === 'staged' || s.fileView === 'flat'
+        ? `<span class="txt sm trunc">${esc(path.split('/').pop())}</span><span class="txt xs muted trunc">${esc(path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '')}</span>`
+        : `<span class="txt sm trunc">${esc(path.split('/').pop())}</span>`}
+    </span>
+    ${stat(f)}
+    <span class="acts">${acts}</span>
   </div>`;
 }
 
-/* ── ① 仓库 + 分支 ───────────────────────────────── */
-function headerCard() {
-  const r = repo();
-  const repoMenu = s.repoMenu ? `<div class="menu">${REPOS.map((item) => `
-      <div class="mi ${item.id === s.repo ? 'dis' : ''}" data-act="pick-repo" data-id="${item.id}">
-        <span>${esc(item.kind)} · ${esc(item.name)}</span>
-        <span class="why">${item.branch} ${item.dirty ? '●' : ''}</span>
-      </div>`).join('')}</div>` : '';
-  const branchMenu = s.branchMenu ? `<div class="menu">
-      <div class="mi dis"><span>main</span><span class="why">当前</span></div>
-      ${BRANCHES.filter((b) => b !== 'main').map((b) => `<div class="mi" data-act="pick-branch" data-b="${b}"><span>${b}</span><span class="why">本地</span></div>`).join('')}
-      <div class="sep"></div>
-      <div class="mi" data-act="new-branch"><span>＋ 新建分支…</span></div>
-    </div>` : '';
-  const remoteMenu = s.remoteMenu ? `<div class="menu">
-      <div class="mi" data-act="remote" data-r="push"><span>推送</span><span class="why">${s.staged.length ? '' : '分支已是最新'}</span></div>
-      <div class="mi" data-act="remote" data-r="fetch"><span>获取（--prune）</span></div>
-      <div class="mi" data-act="remote" data-r="pull"><span>拉取</span><span class="why">${dirty() ? '先提交或贮藏改动' : ''}</span></div>
-      <div class="mi" data-act="remote" data-r="ff"><span>快进</span></div>
-      <div class="mi" data-act="remote" data-r="sync"><span>同步</span></div>
-      <div class="mi" data-act="remote" data-r="rebase"><span>变基到上游</span></div>
-      <div class="sep"></div>
-      <div class="mi" data-act="remote" data-r="publish"><span>发布分支</span></div>
-      <div class="mi dis"><span>强推（with lease）</span><span class="why">需要提交</span></div>
-      <div class="sep"></div>
-      <div class="mi" data-act="remote" data-r="pr"><span>创建 PR</span></div>
-      <div class="mi" data-act="remote" data-r="prpush"><span>先推送再创建 PR</span></div>
-    </div>` : '';
+/* 目录树：单行目录 + 缩进子项 */
+function treeRows(paths) {
+  const root = { dirs: new Map(), files: [] };
+  for (const path of paths) {
+    const parts = path.split('/');
+    const name = parts.pop();
+    let node = root;
+    let prefix = '';
+    for (const segment of parts) {
+      prefix = prefix ? `${prefix}/${segment}` : segment;
+      if (!node.dirs.has(segment)) node.dirs.set(segment, { path: prefix, dirs: new Map(), files: [] });
+      node = node.dirs.get(segment);
+    }
+    node.files.push({ name, path });
+  }
+  const count = (n) => n.files.length + [...n.dirs.values()].reduce((sum, d) => sum + count(d), 0);
+  const render = (node, depth) => {
+    let out = '';
+    for (const [name, dir] of [...node.dirs.entries()].sort()) {
+      const open = s.openDirs[dir.path] ?? depth === 0;
+      out += `<div class="dir">
+        <button class="ibtn bare" data-act="dir" data-p="${dir.path}">${open ? '▾' : '▸'}</button>
+        <span class="txt sm strong trunc">${esc(name)}</span>
+        <span class="txt xs muted">${count(dir)}</span>
+        <span class="acts" style="margin-left:auto">
+          <button class="ibtn" data-act="stage-dir" data-p="${dir.path}">+</button>
+          <button class="ibtn d" data-act="discard-dir" data-p="${dir.path}">🗑</button>
+        </span>
+      </div>`;
+      if (open) out += `<div class="indent">${render(dir, depth + 1)}</div>`;
+    }
+    for (const file of node.files.sort((a, b) => a.name.localeCompare(b.name))) out += fileRow(file.path, 'changes');
+    return out;
+  };
+  return render(root, 0);
+}
+
+function header() {
   return `<div class="col">
     <div class="sel" data-act="repo-menu">
       <span class="row" style="gap:6px;min-width:0">
-        <span class="kind xs">${esc(r.kind)} ·</span>
-        <span class="name trunc">${esc(r.name)}</span>
-        <span class="br">${esc(r.branch)}</span>
-        ${r.dirty ? '<span class="txt w">●</span>' : ''}
+        <span class="txt xs muted">主仓库 ·</span>
+        <span class="txt sm strong trunc">git-panel-plugin</span>
+        <span class="txt xs mono muted">main</span>
+        <span class="txt w">●</span>
       </span>
       <span class="txt xs muted">▾</span>
     </div>
-    ${repoMenu}
-    <div class="row">
-      <span class="row grow" style="gap:4px">
-        <button class="ibtn" data-act="branch-menu" title="分支">⎇</button>
-        <span class="txt sm" style="font-weight:600">${esc(r.branch)}</span>
-        <button class="ibtn" data-act="refresh" title="刷新">⟳</button>
+    <div class="row between">
+      <span class="row" style="gap:5px">
+        <button class="ibtn bare" data-act="tab" data-tab="branch">⎇</button>
+        <span class="txt sm strong">main</span>
+        <button class="ibtn bare" data-act="refresh">⟳</button>
       </span>
-      <span class="row" style="gap:4px">
-        <span class="badge ${dirty() ? 'w' : 's'}">${dirty() ? '有改动' : '干净'}</span>
-        <button class="ibtn" data-act="remote-menu" title="更多远端操作">···</button>
+      <span class="row" style="gap:5px">
+        <span class="badge ${s.staged.length + s.changes.length ? 'w' : 's'}">${s.staged.length + s.changes.length ? '有改动' : '干净'}</span>
+        <button class="ibtn bare" data-act="tab" data-tab="history">⌕</button>
+        <button class="ibtn bare" data-act="tab" data-tab="remote">···</button>
       </span>
     </div>
-    ${branchMenu}
-    ${remoteMenu}
-    ${s.repo === 'root' ? `<div class="row between"><span class="txt xs muted">↑2 ↓0 · origin/main</span><span class="badge a">PR #128</span></div>` : ''}
-  </div>`;
-}
-
-/* ── ② 冲突 ───────────────────────────────────────── */
-function conflictCard() {
-  if (!s.conflict) return '';
-  const files = ['src/worker.ts', 'src/panel.tsx'];
-  const left = files.length - s.conflictResolved.length;
-  return `<div class="callout">
     <div class="row between">
-      <span class="t">合并进行中</span>
-      <span class="txt xs d">${left} 个文件未解决</span>
-    </div>
-    ${files.map((p) => {
-      const done = s.conflictResolved.includes(p);
-      return `<div class="col" style="gap:3px">
-        <div class="row">
-          <span class="txt xs d">!</span>
-          <span class="txt xs ${done ? 'muted' : ''} grow trunc">${esc(p)}${done ? ' · 已解决' : ''}</span>
-        </div>
-        ${done ? '' : `<div class="row" style="padding-left:14px">
-          <button class="btn outline sm" data-act="resolve" data-p="${p}">保留我方</button>
-          <button class="btn ghost sm" data-act="resolve" data-p="${p}">保留对方</button>
-          <button class="btn ghost sm" data-act="resolve" data-p="${p}">标记已解决</button>
-        </div>`}
-      </div>`;
-    }).join('')}
-    <div class="row between">
-      <button class="btn outline sm danger" data-act="abort-merge">中止合并</button>
-      <button class="btn ghost sm" data-act="complete-merge" ${left ? 'disabled' : ''}>完成合并</button>
+      <span class="txt xs muted">↑1 ↓0 · origin/main</span>
+      <span class="row" style="gap:5px">
+        ${s.base.ahead > 0 ? `<button class="btn ghost sm txt w" data-act="tab" data-tab="base">↓ 基准领先 ${s.base.ahead}</button>` : ''}
+        <span class="badge a">PR #128</span>
+      </span>
     </div>
   </div>`;
 }
 
-/* ── ③ 提交 ───────────────────────────────────────── */
-function commitBlock() {
-  const n = s.staged.length;
-  const reason = s.conflict ? '有冲突' : !n ? '未暂存任何文件' : !s.message.trim() ? '需要提交信息' : '';
-  const collapsible = n === 0 && !s.message.trim();
-  if (collapsible) s.open.commit = false;
-  const target = s.repo === 'root' ? '提交' : `提交到 ${repo().kind} ${repo().name}`;
+function tabs() {
+  const items = [
+    ['commit', '提交', s.staged.length],
+    ['changes', '更改', s.changes.length],
+    ['base', '基准', 0],
+    ['history', '历史', HISTORY.length],
+    ['stash', '贮藏', STASHES.length],
+    ['branch', '分支', BRANCHES.length],
+    ['remote', '更多', 0],
+  ];
+  return `<div class="tabs">${items.map(([id, label, n]) =>
+    `<button data-act="tab" data-tab="${id}" aria-selected="${s.tab === id}">${label}${n ? ` ${n}` : ''}</button>`).join('')}</div>`;
+}
+
+function pageCommit() {
+  const reason = s.conflict ? '有冲突' : !s.staged.length ? '未暂存任何文件' : !s.message.trim() ? '需要提交信息' : '';
   const menu = s.commitMenu ? `<div class="menu">
-      <div class="mi" data-act="commit-kind" data-k="commit"><span>提交</span><span class="why">${s.conflict ? '有冲突' : ''}</span></div>
-      <div class="mi" data-act="commit-kind" data-k="push"><span>提交并推送</span><span class="why">${s.conflict ? '有冲突' : ''}</span></div>
-      <div class="mi" data-act="commit-kind" data-k="sync"><span>提交并同步</span><span class="why">${s.conflict ? '有冲突' : '未发布'}</span></div>
-      <div class="mi" data-act="commit-kind" data-k="force"><span>提交并强推（with lease）</span><span class="why">${s.conflict ? '有冲突' : '需要提交'}</span></div>
+      <div class="mi"><span>提交</span><span class="note">${reason}</span></div>
+      <div class="mi"><span>提交并推送</span><span class="note">${reason}</span></div>
+      <div class="mi"><span>提交并同步</span><span class="note">${reason || '未发布'}</span></div>
+      <div class="mi"><span>提交并强推（with lease）</span><span class="note">${reason || '需要提交'}</span></div>
     </div>` : '';
-  const tail = `<span class="count">已暂存 ${n} 个文件</span>
-    ${n ? `<button class="ibtn d" data-act="discard-staged" title="丢弃全部已暂存">🗑</button>` : ''}`;
-  const body = collapsible ? '' : `<div class="inner">
-      <textarea class="msg" id="msg" placeholder="写提交信息，"${s.amend ? ' placeholder="修正上次提交的信息"' : ''}>${esc(s.message)}</textarea>
-      <label class="row txt xs muted" style="gap:6px">
-        <input type="checkbox" id="amend" ${s.amend ? 'checked' : ''}> 修正上次提交
-      </label>
-      ${n ? `<div class="col" style="gap:0">${s.staged.map((k) => fileRow(k, 'staged')).join('')}</div>` : ''}
-      <div class="row" style="gap:6px">
-        <button class="btn solid" data-act="commit" ${reason ? 'disabled' : ''}>${esc(target)}</button>
-        <button class="ibtn" data-act="commit-menu" title="更多提交方式">▾</button>
-        <span class="hint grow">${esc(reason)}</span>
-      </div>
-      ${menu}
-    </div>`;
-  return `<div class="card ${s.open.commit ? '' : 'collapsed'}">
-    ${head('commit', '提交', collapsible ? '还没有暂存的更改' : '', tail)}
-    ${body}
+  return `<div class="col">
+    <div class="row between">
+      <span class="txt xs muted">${s.staged.length ? `已暂存 ${s.staged.length}` : '未暂存任何文件'}</span>
+      ${s.staged.length ? `<button class="ibtn d" data-act="discard-staged">🗑</button>` : ''}
+    </div>
+    <textarea class="msg" id="msg" placeholder="提交信息">${esc(s.message)}</textarea>
+    <label class="row txt xs muted"><input type="checkbox" id="amend" ${s.amend ? 'checked' : ''}> 修正上次提交</label>
+    ${s.staged.map((p) => fileRow(p, 'staged')).join('')}
+    <div class="row">
+      <button class="btn solid" data-act="commit" ${reason ? 'disabled' : ''}>提交</button>
+      <button class="ibtn" data-act="commit-menu">▾</button>
+      <span class="note grow">${esc(reason)}</span>
+    </div>
+    ${menu}
   </div>`;
 }
 
-/* ── ④ 更改 ──────────────────────────────────────── */
-function changesBlock() {
-  const files = changeFiles();
-  const tail = `${files.length ? `<button class="ibtn" data-act="stage-all" title="全部暂存">+</button><button class="ibtn d" data-act="discard-changes" title="全部丢弃">🗑</button>` : ''}`;
-  const body = files.length
-    ? `<div class="inner">${files.map((f) => fileRow(f.path && Object.keys(FILES).find((k) => FILES[k] === f), 'changes')).join('')}</div>`
-    : `<div class="inner"><span class="txt xs muted">工作区干净，没有未暂存的改动。</span></div>`;
-  return `<div class="card ${s.open.changes ? '' : 'collapsed'}">
-    ${head('changes', '更改', String(files.length), tail)}
-    ${body}
+function pageChanges() {
+  if (!s.changes.length) return `<span class="txt xs muted">没有已暂存、已修改或未跟踪的文件。</span>`;
+  return `<div class="col">
+    <div class="row between">
+      <span class="txt xs muted">${s.changes.length} 个文件</span>
+      <span class="row" style="gap:5px">
+        <button class="btn sm" data-act="fileview">${s.fileView === 'tree' ? '树形' : '平铺'} ▾</button>
+        <button class="ibtn" data-act="stage-all">+</button>
+        <button class="ibtn d" data-act="discard-all">🗑</button>
+      </span>
+    </div>
+    ${s.fileView === 'flat'
+      ? s.changes.map((p) => fileRow(p, 'changes')).join('')
+      : treeRows(s.changes)}
   </div>`;
 }
 
-/* ── ⑤ 基准 ──────────────────────────────────────── */
-function baseBlock() {
-  const ahead = s.baseAhead;
-  const tail = `<span class="txt xs ${ahead ? 'w' : 's'}">${ahead ? `领先 ${ahead}` : '已合入'}</span>`;
-  const body = `<div class="inner">
-      <div class="row between">
-        <span class="txt xs mono">origin/main</span>
-        <span class="txt xs ${ahead ? 'w' : 's'}">${ahead ? `基准领先 ${ahead} 个提交` : '基准已合入'}</span>
-      </div>
-      ${ahead ? `<div class="col" style="gap:2px">
-        ${BASE_COMMITS.slice(0, ahead).map((c) => `<div class="row"><span class="txt xs mono muted">${c.sha}</span><span class="txt xs trunc">${esc(c.subject)}</span></div>`).join('')}
-      </div>` : ''}
-      <div class="row">
-        <button class="btn outline sm" data-act="pull-base" ${dirty() || s.conflict || !ahead ? 'disabled' : ''}>↓ 拉取基准分支</button>
-        ${dirty() || s.conflict || !ahead ? `<span class="hint">${s.conflict ? '合并进行中' : dirty() ? '先提交或贮藏改动' : '已经是最新'}</span>` : ''}
-      </div>
-    </div>`;
-  return `<div class="card ${s.open.base ? '' : 'collapsed'}">${head('base', '基准 origin/main', '', tail)}${body}</div>`;
+function pageBase() {
+  const b = s.base;
+  const overwritten = b.overwritten || [];
+  return `<div class="col">
+    <div class="sel" data-act="base-select">
+      <span class="row" style="gap:6px"><span class="txt xs muted">基准分支</span><span class="txt sm strong">${esc(b.ref)}</span></span>
+      <span class="txt xs muted">▾</span>
+    </div>
+    <div class="row between">
+      <span class="txt sm strong trunc">${esc(b.ref)}</span>
+      <span class="txt xs ${b.ahead ? 'w' : 's'}">${b.ahead ? `基准领先 ${b.ahead} 个提交` : '基准已合入'}</span>
+    </div>
+    ${b.commits.length ? `<div class="col" style="gap:2px">${b.commits.map((c) =>
+      `<div class="row"><span class="txt xs mono muted">${c.sha}</span><span class="txt xs trunc">${esc(c.subject)}</span></div>`).join('')}</div>` : ''}
+    <div class="row">
+      <button class="btn sm" data-act="pull" data-fetch="1" ${overwritten.length || !b.ahead || s.conflict ? 'disabled' : ''}>获取并合并</button>
+      <button class="btn ghost sm" data-act="pull" data-fetch="0" ${overwritten.length || !b.ahead || s.conflict ? 'disabled' : ''}>仅合并本地基准</button>
+    </div>
+    ${s.conflict ? '<span class="note">合并进行中</span>' : ''}
+    ${overwritten.length ? `<div class="col" style="gap:2px">
+      <span class="txt xs w">合入会覆盖 ${overwritten.length} 个未跟踪文件，先移走或删除它们：</span>
+      ${overwritten.map((p) => `<span class="txt xs muted mono trunc">${esc(p)}</span>`).join('')}
+    </div>` : ''}
+    ${b.fellBackTo ? `<span class="note">原来选的基准已不存在，已回退到 ${esc(b.fellBackTo)}。</span>` : ''}
+    ${s.failure ? `<div class="col" style="gap:5px">
+      <span class="txt xs d">${esc(s.failure)}</span>
+      <button class="btn ghost sm" style="align-self:flex-start" data-act="detail">${s.detailOpen ? '收起原始输出' : '查看原始输出'}</button>
+      ${s.detailOpen ? `<div class="code">fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights and the repository exists.</div>` : ''}
+    </div>` : ''}
+    ${s.degraded ? `<span class="note">没能获取最新（无访问权限），已用本地缓存完成合并。</span>` : ''}
+  </div>`;
 }
 
-/* ── ⑥ 历史 ──────────────────────────────────────── */
-function historyBlock() {
-  const body = `<div class="inner">
-      <div class="sel"><span class="txt xs muted">按信息或哈希前缀过滤…</span><span class="txt xs muted">⌘K</span></div>
-      ${HISTORY.map((c) => `
-        <div class="col" style="gap:2px">
-          <div class="file" data-act="pick-commit" data-sha="${c.sha}" style="cursor:pointer">
-            <span class="col grow" style="gap:0">
-              <span class="txt sm trunc">${esc(c.subject)}</span>
-              <span class="txt xs muted">${c.sha} · ${c.who} · ${c.when}</span>
-            </span>
-            <span class="txt xs muted">${c.files} 文件</span>
-          </div>
-          ${s.picked === c.sha ? `<div class="col" style="gap:2px;padding-left:14px">
-            <div class="row"><span class="txt xs mono muted">M</span><span class="txt xs">src/panel.tsx</span><span class="txt xs mono s">+84</span><span class="txt xs mono d">−12</span></div>
-            <div class="row"><span class="txt xs mono muted">A</span><span class="txt xs">docs/ui-v4.html</span><span class="txt xs mono s">+612</span></div>
-          </div>` : ''}
-        </div>`).join('')}
-      <button class="btn ghost sm" style="align-self:center">加载更多</button>
-    </div>`;
-  return `<div class="card ${s.open.history ? '' : 'collapsed'}">${head('history', '历史', `${HISTORY.length}`)}${body}</div>`;
+function pageHistory() {
+  return `<div class="col">
+    <div class="sel"><span class="txt xs muted">按信息或哈希前缀过滤…</span><span class="txt xs muted">⌘K</span></div>
+    ${HISTORY.map((c) => `<div class="col" style="gap:1px">
+      <span class="txt sm trunc">${esc(c.subject)}</span>
+      <span class="txt xs muted">${c.sha} · 我 · ${c.when}</span>
+    </div>`).join('')}
+    <button class="btn ghost sm" style="align-self:center">加载更多</button>
+  </div>`;
 }
 
-/* ── ⑦ 贮藏 ──────────────────────────────────────── */
-function stashBlock() {
-  const body = `<div class="inner">
-      <div class="row">
-        <button class="btn outline sm" data-act="stash-new">＋ 新建贮藏</button>
-        <label class="row txt xs muted" style="gap:5px"><input type="checkbox"> 含未跟踪</label>
-      </div>
-      ${STASHES.map((st) => `<div class="file">
-        <span class="col grow" style="gap:0">
-          <span class="txt sm trunc">${esc(st.message)}</span>
-          <span class="txt xs muted">${st.ref} · ${st.when}</span>
-        </span>
-        <span class="acts">
-          <button class="btn outline sm" data-act="stash-apply">应用</button>
-          <button class="btn ghost sm" data-act="stash-pop">弹出</button>
-          <button class="ibtn d" data-act="stash-drop">🗑</button>
-        </span>
-      </div>`).join('')}
-    </div>`;
-  return `<div class="card ${s.open.stash ? '' : 'collapsed'}">${head('stash', '贮藏', String(STASHES.length))}${body}</div>`;
+function pageStash() {
+  return `<div class="col">
+    <div class="row"><button class="btn sm" data-act="stash-new">＋ 新建贮藏</button>
+      <label class="row txt xs muted"><input type="checkbox"> 含未跟踪</label></div>
+    ${STASHES.map((st) => `<div class="row between">
+      <span class="col grow" style="gap:1px"><span class="txt sm trunc">${esc(st.message)}</span><span class="txt xs muted">${st.ref} · ${st.when}</span></span>
+      <span class="row" style="gap:3px"><button class="btn sm">应用</button><button class="btn ghost sm">弹出</button><button class="ibtn d">🗑</button></span>
+    </div>`).join('')}
+  </div>`;
 }
 
-/* ── ⑧ 分支 ──────────────────────────────────────── */
-function branchBlock() {
-  const body = `<div class="inner">
-      ${BRANCHES.map((b) => `<div class="file">
-        <span class="txt sm grow ${b === repo().branch ? '' : 'muted'}">${b}</span>
-        ${b === repo().branch ? '<span class="badge a">当前</span>' : '<button class="btn outline sm" data-act="pick-branch" data-b="' + b + '">切换</button>'}
-      </div>`).join('')}
-      <button class="btn ghost sm" style="align-self:flex-start">＋ 新建分支</button>
-    </div>`;
-  return `<div class="card ${s.open.branch ? '' : 'collapsed'}">${head('branch', '分支', String(BRANCHES.length))}${body}</div>`;
+function pageBranch() {
+  return `<div class="col">
+    <div class="row between">
+      <span class="txt xs muted">${BRANCHES.length} 个分支</span>
+      <button class="btn ghost sm" data-act="new-branch">＋ 新建分支</button>
+    </div>
+    ${BRANCHES.map((b) => `<div class="row between">
+      <span class="col grow" style="gap:1px">
+        <span class="txt sm trunc ${b.current ? 'strong' : ''}">${esc(b.name)}</span>
+        <span class="txt xs muted">${[b.remote ? '远端' : null, b.current ? '当前' : null].filter(Boolean).join(' · ') || ' '}</span>
+      </span>
+      <span class="row" style="gap:3px">
+        ${b.current ? '' : `<button class="btn sm" data-act="switch" data-b="${esc(b.name)}">切换</button>`}
+        ${b.remote || b.current ? '' : (s.deleteConfirm === b.name
+          ? `<button class="btn danger sm" data-act="delete-yes" data-b="${esc(b.name)}">强制删除</button>`
+          : `<button class="ibtn d" data-act="delete" data-b="${esc(b.name)}" title="删除 ${esc(b.name)}">🗑</button>`)}
+      </span>
+    </div>`).join('')}
+  </div>`;
 }
 
-/* ── 渲染 ────────────────────────────────────────── */
-function renderPreview() {
-  const box = document.getElementById('preview');
-  if (!s.preview) {
-    box.innerHTML = '<div class="empty-preview">选中文件或提交后在这里看差异（≥560px 才出现）</div>';
-    return;
-  }
-  box.innerHTML = `<div class="preview-head">${esc(s.preview.label)}</div>
-    <div class="diff">${s.preview.lines}</div>`;
+function pageRemote() {
+  const rows = [
+    ['提交', ''], ['提交并推送', ''], ['提交并同步', '未发布'], ['提交并强推', '需要提交'],
+    ['推送', '分支已是最新'], ['发布分支', '已发布'], ['强推（with lease）', '需要提交'],
+    ['获取（--prune）', ''], ['拉取', '先提交或贮藏改动'], ['快进', ''], ['同步', ''], ['变基到上游', ''],
+    ['创建 PR', '有未提交更改'], ['先推再建 PR', ''],
+  ];
+  return `<div class="menu">${rows.map(([label, why]) => `<div class="mi ${why ? 'dis' : ''}"><span>${label}</span><span class="note">${why}</span></div>`).join('')}</div>`;
 }
 
 function render() {
-  const app = document.querySelector('.app');
-  const mode = s.w >= 560 ? 'wide' : s.w >= 480 ? 'mid' : 'narrow';
-  app.dataset.w = mode;
-  app.style.width = `${440 + s.w}px`;
-  app.querySelector('.side').style.setProperty('--w', `${s.w}px`);
-  document.getElementById('wlabel').textContent = String(s.w);
-
-  document.getElementById('panel').innerHTML = [
-    headerCard(), conflictCard(), commitBlock(), changesBlock(), baseBlock(),
-    historyBlock(), stashBlock(), branchBlock(),
-  ].join('');
-  document.getElementById('head-state').textContent = dirty() ? `${s.staged.length + s.changes.length} 个文件待处理` : '干净';
+  const pages = { commit: pageCommit, changes: pageChanges, base: pageBase, history: pageHistory, stash: pageStash, branch: pageBranch, remote: pageRemote };
+  const conflictBanner = s.conflict ? `<div class="callout">合并进行中 · 2 个文件未解决<br><span class="txt xs">src/worker.ts · src/state.ts</span>
+    <div class="row" style="margin-top:5px"><button class="btn danger sm">中止合并</button><button class="btn ghost sm">完成合并</button></div></div>` : '';
+  document.getElementById('panel').innerHTML = header() + conflictBanner + tabs() + `<div class="col" style="padding-top:2px">${pages[s.tab]()}</div>`;
   const msg = document.getElementById('msg');
   if (msg && s.focusMsg) { msg.focus(); s.focusMsg = false; }
-  renderPreview();
 }
 
-const DIFF_TEXT = [
-  '<span class="hunk">@@ -12,3 +12,5 @@</span>',
-  '<span class="ctx">  const selected = atom(\'\')</span>',
-  '<span class="del">-  const repos = atom([])</span>',
-  '<span class="add">+  const repos = atom&lt;Repo[]&gt;([])</span>',
-  '<span class="add">+  const kinds = atom({})</span>',
-  '<span class="ctx">  const snapshot = atom(null)</span>',
-].join('\n');
-
-/* ── 事件 ────────────────────────────────────────── */
-document.addEventListener('click', (event) => {
-  const card = event.target.closest('[data-card]');
-  if (card && !event.target.closest('button')) {
-    const id = card.dataset.card;
-    s.open[id] = !s.open[id];
-    render();
-    return;
-  }
-  const el = event.target.closest('[data-act]');
+/* ── 交互 ───────────────────────────────────────── */
+document.addEventListener('input', (e) => { if (e.target.id === 'msg') s.message = e.target.value; });
+document.addEventListener('change', (e) => { if (e.target.id === 'amend') { s.amend = e.target.checked; render(); } });
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-act]');
   if (!el) return;
   const act = el.dataset.act;
-  const k = el.dataset.k;
-
+  const p = el.dataset.p;
   switch (act) {
-    case 'stage':
-      s.changes = s.changes.filter((x) => x !== k);
-      s.staged.push(k);
-      s.discard = null;
-      toast(`已暂存 ${file(k).path}`);
-      break;
-    case 'unstage':
-      s.staged = s.staged.filter((x) => x !== k);
-      s.changes.push(k);
-      toast(`已取消暂存 ${file(k).path}`);
-      break;
-    case 'stage-all':
-      s.staged.push(...s.changes);
-      s.changes = [];
-      toast('已全部暂存');
-      break;
-    case 'discard':
-    case 'discard-changes':
-    case 'discard-staged':
-      s.discard = act === 'discard' ? k : null;
-      render();
-      return;
-    case 'discard-yes':
-      if (s.staged.includes(k)) s.staged = s.staged.filter((x) => x !== k);
-      if (s.changes.includes(k)) s.changes = s.changes.filter((x) => x !== k);
-      s.discard = null;
-      toast(`已丢弃 ${file(k).path}`);
-      break;
-    case 'discard-no':
-      s.discard = null;
-      break;
-    case 'diff':
-      if (s.w >= 560) {
-        s.preview = { label: file(k).path, lines: DIFF_TEXT };
-        render();
-        return;
-      }
-      toast(`展开 ${file(k).path} 的差异`);
-      return;
-    case 'open':
-      toast(`在编辑器打开 ${file(k).path}`);
-      return;
-    case 'commit-menu':
-      s.commitMenu = !s.commitMenu;
-      break;
+    case 'tab': s.tab = el.dataset.tab; s.refreshHistory = true; break;
+    case 'stage': s.changes = s.changes.filter((x) => x !== p); s.staged.push(p); toast(`已暂存 ${p}`); break;
+    case 'unstage': s.staged = s.staged.filter((x) => x !== p); s.changes.push(p); toast(`已取消暂存 ${p}`); break;
+    case 'stage-all': s.staged.push(...s.changes); s.changes = []; break;
+    case 'stage-dir': s.staged.push(...s.changes.filter((x) => x.startsWith(p + '/'))); s.changes = s.changes.filter((x) => !x.startsWith(p + '/')); break;
+    case 'dir': s.openDirs[p] = !(s.openDirs[p] ?? false); break;
+    case 'fileview': s.fileView = s.fileView === 'tree' ? 'flat' : 'tree'; break;
+    case 'diff': case 'open': case 'refresh': toast('（原型略）'); return;
+    case 'discard': case 'discard-all': case 'discard-staged': case 'discard-dir': toast('会就地二次确认'); return;
+    case 'commit-menu': s.commitMenu = !s.commitMenu; break;
     case 'commit':
-    case 'commit-kind': {
       if (s.conflict || !s.staged.length || !s.message.trim()) return;
-      const kind = act === 'commit' ? 'commit' : k;
-      s.staged = [];
-      s.message = '';
-      s.commitMenu = false;
-      toast({ commit: '已提交', push: '已提交并推送', sync: '已提交并同步', force: '已提交并强推' }[kind]);
+      s.staged = []; s.message = ''; s.commitMenu = false; toast('已提交'); break;
+    case 'pull':
+      if (el.dataset.fetch === '1' && s.tab === 'base') {
+        // 演示三种结局
+        if (s.failure) { s.failure = null; }
+      }
+      s.base.ahead = 0; s.base.commits = [];
+      if (s.scenario === 'base-fail') { s.failure = '获取失败：没有访问权限或仓库不存在。可以先点「仅合并本地基准」。'; s.base.ahead = 2; s.base.commits = COMMITS.slice(0, 2); }
+      else if (s.scenario === 'base-degraded') s.degraded = true;
+      else toast('已用选中的基准完成合并');
       break;
-    }
-    case 'repo-menu':
-      s.repoMenu = !s.repoMenu; s.branchMenu = false; s.remoteMenu = false;
-      break;
-    case 'branch-menu':
-      s.branchMenu = !s.branchMenu; s.repoMenu = false; s.remoteMenu = false;
-      break;
-    case 'remote-menu':
-      s.remoteMenu = !s.remoteMenu; s.repoMenu = false; s.branchMenu = false;
-      break;
-    case 'pick-repo':
-      s.repo = el.dataset.id; s.repoMenu = false;
-      toast(`切到 ${repo().kind} ${repo().name}`);
-      break;
-    case 'pick-branch':
-      repo().branch = el.dataset.b; s.branchMenu = false;
-      toast(`切到分支 ${el.dataset.b}`);
-      break;
-    case 'new-branch':
-      s.branchMenu = false;
-      toast('就地输入新分支名（原型略）');
-      return;
-    case 'refresh':
-      toast('已刷新');
-      return;
-    case 'remote':
-      s.remoteMenu = false;
-      toast(`执行 ${el.dataset.r}`);
-      break;
-    case 'resolve':
-      s.conflictResolved.push(el.dataset.p);
-      if (s.conflictResolved.length === 2) toast('冲突已全部解决，可以完成合并');
-      break;
-    case 'abort-merge':
-      s.conflict = false; s.conflictResolved = [];
-      toast('已中止合并');
-      break;
-    case 'complete-merge':
-      if (s.conflictResolved.length < 2) return;
-      s.conflict = false; s.conflictResolved = [];
-      toast('合并已完成');
-      break;
-    case 'pull-base':
-      s.baseAhead = 0; s.basePulled = true;
-      s.staged.push('state');
-      s.changes = s.changes.filter((x) => x !== 'state');
-      toast('已拉取基准分支');
-      break;
-    case 'pick-commit':
-      s.picked = s.picked === el.dataset.sha ? null : el.dataset.sha;
-      break;
-    case 'stash-new':
-      toast('已新建贮藏');
-      return;
-    case 'stash-apply': case 'stash-pop': case 'stash-drop':
-      toast({ 'stash-apply': '已应用', 'stash-pop': '已弹出', 'stash-drop': '已删除' }[act]);
-      return;
+    case 'detail': s.detailOpen = !s.detailOpen; break;
+    case 'repo-menu': toast('（原型略）'); return;
+    case 'base-select': toast('会列出全部远端/本地分支'); return;
+    case 'delete': s.deleteConfirm = el.dataset.b; break;
+    case 'delete-yes': s.deleteConfirm = null; toast(`已删除 ${el.dataset.b}`); break;
+    case 'switch': toast(`已切到 ${el.dataset.b}`); break;
+    case 'new-branch': case 'stash-new': toast('（原型略）'); return;
   }
   render();
 });
 
-document.addEventListener('input', (event) => {
-  if (event.target.id === 'msg') s.message = event.target.value;
-});
-
-document.addEventListener('change', (event) => {
-  if (event.target.id === 'amend') { s.amend = event.target.checked; render(); }
-});
-
-document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') {
-    s.commitMenu = false; s.repoMenu = false; s.branchMenu = false; s.remoteMenu = false; s.discard = null;
-    render();
-  }
-  if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-    if (document.activeElement && document.activeElement.id === 'msg') {
-      event.preventDefault();
-      if (!s.conflict && s.staged.length && s.message.trim()) {
-        s.staged = []; s.message = ''; render(); toast('已提交');
-      }
-    }
-  }
-});
-
-/* ── 场景 ────────────────────────────────────────── */
 function applyScenario(name) {
   s = fresh();
   s.scenario = name;
-  if (name === 'clean') { s.staged = []; s.changes = []; s.baseAhead = 0; }
-  if (name === 'conflict') { s.conflict = true; s.open.commit = true; s.staged = ['worker']; }
-  if (name === 'sub') { s.repo = 'sub'; s.staged = ['panel']; s.changes = ['state']; s.baseAhead = 1; }
+  if (name === 'clean') { s.staged = []; s.changes = []; s.base.ahead = 0; s.base.commits = []; }
+  if (name === 'tree') { s.changes = ['src/worker.ts', 'src/state.ts', 'src/base-card.tsx', 'docs/ui-v4.html', 'notes.md']; }
+  if (name === 'base-fail') { s.tab = 'base'; }
+  if (name === 'base-degraded') { s.tab = 'base'; }
+  if (name === 'overwrite') { s.tab = 'base'; s.base.overwritten = ['docs/ui-v4.html', 'notes.md']; }
+  if (name === 'conflict') { s.conflict = true; s.staged = ['src/worker.ts']; }
+  if (name === 'dirty') s.tab = 'changes';
   render();
 }
 
-document.getElementById('scenarios').addEventListener('click', (event) => {
-  const btn = event.target.closest('button[data-s]');
+document.getElementById('scenarios').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-s]');
   if (!btn) return;
-  document.querySelectorAll('#scenarios button').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+  document.querySelectorAll('#scenarios button[data-s]').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
   applyScenario(btn.dataset.s);
 });
-document.getElementById('theme').addEventListener('click', (event) => {
-  document.body.classList.toggle('light');
-  event.target.textContent = document.body.classList.contains('light') ? '切换暗色' : '切换亮色';
-});
-document.getElementById('reset').addEventListener('click', () => applyScenario(s.scenario));
-document.getElementById('width').addEventListener('input', (event) => {
-  s.w = Number(event.target.value);
-  render();
+document.getElementById('theme').addEventListener('click', (e) => {
+  document.body.classList.toggle('dark');
+  e.target.textContent = document.body.classList.contains('dark') ? '切换亮色' : '切换暗色';
 });
 
-const startW = Number(new URLSearchParams(location.search).get('w'));
-if (startW >= 280 && startW <= 720) {
-  s.w = startW;
-  document.getElementById('width').value = String(startW);
-}
-
-render();
+applyScenario('dirty');
 </script>
 </body>
 </html>
