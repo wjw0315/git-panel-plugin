@@ -181,7 +181,7 @@ const fresh = () => ({
   tab: 'changes', staged: [], changes: ['src/worker.ts', 'src/state.ts', 'notes.md'],
   message: '', amend: false, commitMenu: false, fileView: 'tree', openDirs: { src: true },
   base: { ref: 'origin/main', ahead: 2, commits: COMMITS.slice(0, 2), overwritten: [], fellBackTo: null },
-  failure: null, degraded: null, detailOpen: false, conflict: false, deleteConfirm: null, repoMenu: false,
+  failure: null, degraded: null, detailOpen: false, conflict: false, deleteConfirm: null, repoMenu: false, branchQuery: '',
 });
 let s = fresh();
 
@@ -404,12 +404,17 @@ function pageStash() {
 }
 
 function pageBranch() {
-  return `<div class="col">
-    <div class="row between">
-      <span class="txt xs muted">${BRANCHES.length} 个分支</span>
-      <button class="btn ghost sm" data-act="new-branch">＋ 新建分支</button>
-    </div>
-    ${BRANCHES.map((b) => `<div class="row between">
+  const needle = (s.branchQuery || '').trim().toLowerCase();
+  const matched = needle
+    ? BRANCHES.filter((b) => b.name.toLowerCase().includes(needle))
+    : BRANCHES;
+  const current = matched.find((b) => b.current && !b.remote) || null;
+  const rest = matched.filter((b) => b !== current);
+  const byName = (a, b) => a.name.localeCompare(b.name);
+  const local = rest.filter((b) => !b.remote).sort(byName);
+  const remote = rest.filter((b) => b.remote).sort(byName);
+
+  const row = (b) => `<div class="row between">
       <span class="col grow" style="gap:1px">
         <span class="txt sm trunc ${b.current ? 'strong' : ''}">${esc(b.name)}</span>
         <span class="txt xs muted">${[b.remote ? '远端' : null, b.current ? '当前' : null].filter(Boolean).join(' · ') || ' '}</span>
@@ -420,7 +425,21 @@ function pageBranch() {
           ? `<button class="btn danger sm" data-act="delete-yes" data-b="${esc(b.name)}">强制删除</button>`
           : `<button class="ibtn d" data-act="delete" data-b="${esc(b.name)}" title="删除 ${esc(b.name)}">🗑</button>`)}
       </span>
-    </div>`).join('')}
+    </div>`;
+
+  return `<div class="col">
+    <div class="row between">
+      <span class="txt xs muted">${matched.length} 个分支</span>
+      <button class="btn ghost sm" data-act="new-branch">＋ 新建分支</button>
+    </div>
+    <div class="row" style="gap:5px">
+      <input class="search" id="branchSearch" placeholder="搜索分支" value="${esc(s.branchQuery || '')}" style="flex:1;height:26px;border:1px solid var(--line-2);border-radius:6px;background:var(--panel);color:var(--fg);font:inherit;font-size:12px;padding:0 8px" />
+      ${s.branchQuery ? '<button class="ibtn" data-act="clear-branch">✕</button>' : ''}
+    </div>
+    ${current ? row(current) : ''}
+    ${local.length ? `<span class="txt xs muted">本地 ${local.length}</span>${local.map(row).join('')}` : ''}
+    ${remote.length ? `<span class="txt xs muted">远端 ${remote.length}</span>${remote.map(row).join('')}` : ''}
+    ${matched.length === 0 ? '<span class="txt xs muted">没有匹配的分支</span>' : ''}
   </div>`;
 }
 
@@ -444,7 +463,10 @@ function render() {
 }
 
 /* ── 交互 ───────────────────────────────────────── */
-document.addEventListener('input', (e) => { if (e.target.id === 'msg') s.message = e.target.value; });
+document.addEventListener('input', (e) => {
+  if (e.target.id === 'msg') s.message = e.target.value;
+  if (e.target.id === 'branchSearch') { s.branchQuery = e.target.value; render(); const el = document.getElementById('branchSearch'); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }
+});
 document.addEventListener('change', (e) => { if (e.target.id === 'amend') { s.amend = e.target.checked; render(); } });
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-act]');
@@ -481,6 +503,7 @@ document.addEventListener('click', (e) => {
     case 'delete': s.deleteConfirm = el.dataset.b; break;
     case 'delete-yes': s.deleteConfirm = null; toast(`已删除 ${el.dataset.b}`); break;
     case 'switch': toast(`已切到 ${el.dataset.b}`); break;
+    case 'clear-branch': s.branchQuery = ''; break;
     case 'new-branch': case 'stash-new': toast('（原型略）'); return;
   }
   render();
